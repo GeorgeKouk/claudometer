@@ -313,7 +313,6 @@ async function fetchRedditPosts(env) {
                   id: comment.data.id,
                   post_id: post.id,
                   content: comment.data.body,
-                  subreddit: subreddit,
                   created_at: new Date(comment.data.created_utc * 1000).toISOString(),
                   score: comment.data.score || 0
                 }));
@@ -458,20 +457,19 @@ async function storeInDatabase(posts, comments, env) {
     for (const comment of comments) {
       const stmt = env.DB.prepare(`
         INSERT OR REPLACE INTO comments 
-        (id, post_id, content, subreddit, created_at, score, sentiment, category, keywords, processed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        (id, post_id, body, score, sentiment, category, keywords, created_at, processed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
       
       await stmt.bind(
         comment.id,
         comment.post_id,
         comment.content,
-        comment.subreddit,
-        comment.created_at,
         comment.score,
         comment.sentiment,
         comment.category,
-        comment.keywords
+        comment.keywords,
+        comment.created_at
       ).run();
     }
 

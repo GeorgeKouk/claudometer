@@ -1,62 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const Claudometer = () => {
   const [timeframe, setTimeframe] = useState('24h');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const currentSentiment = 0.72;
+  const [currentSentiment, setCurrentSentiment] = useState(0.5);
+  const [hourlyData, setHourlyData] = useState([]);
+  const [categoryData, setCategoryData] = useState([]);
+  const [keywordData, setKeywordData] = useState([]);
+  const [recentPosts, setRecentPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock data - in real implementation, this would come from your Reddit API + AI analysis
-  const hourlyData = [
-    { time: '00:00', sentiment: 0.68, posts: 12 },
-    { time: '01:00', sentiment: 0.71, posts: 8 },
-    { time: '02:00', sentiment: 0.69, posts: 5 },
-    { time: '03:00', sentiment: 0.73, posts: 4 },
-    { time: '04:00', sentiment: 0.67, posts: 7 },
-    { time: '05:00', sentiment: 0.75, posts: 9 },
-    { time: '06:00', sentiment: 0.72, posts: 15 },
-    { time: '07:00', sentiment: 0.78, posts: 22 },
-    { time: '08:00', sentiment: 0.74, posts: 31 },
-    { time: '09:00', sentiment: 0.69, posts: 28 },
-    { time: '10:00', sentiment: 0.71, posts: 35 },
-    { time: '11:00', sentiment: 0.73, posts: 42 },
-    { time: '12:00', sentiment: 0.76, posts: 38 },
-    { time: '13:00', sentiment: 0.74, posts: 44 },
-    { time: '14:00', sentiment: 0.72, posts: 41 },
-    { time: '15:00', sentiment: 0.70, posts: 39 },
-    { time: '16:00', sentiment: 0.68, posts: 37 },
-    { time: '17:00', sentiment: 0.71, posts: 45 },
-    { time: '18:00', sentiment: 0.73, posts: 52 },
-    { time: '19:00', sentiment: 0.72, posts: 48 },
-    { time: '20:00', sentiment: 0.74, posts: 46 },
-    { time: '21:00', sentiment: 0.76, posts: 43 },
-    { time: '22:00', sentiment: 0.75, posts: 38 },
-    { time: '23:00', sentiment: 0.72, posts: 29 }
-  ];
+  const API_BASE = 'https://claudometer-api.georgekouk.workers.dev/api';
 
-  const categoryData = [
-    { name: 'Web Interface', value: 45, sentiment: 0.71 },
-    { name: 'Claude Code', value: 30, sentiment: 0.74 },
-    { name: 'API', value: 15, sentiment: 0.68 },
-    { name: 'General', value: 10, sentiment: 0.76 }
-  ];
+  // Fetch data from API
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch all data in parallel
+        const [currentRes, hourlyRes, categoriesRes, keywordsRes, postsRes] = await Promise.all([
+          fetch(`${API_BASE}/current-sentiment`),
+          fetch(`${API_BASE}/hourly-data`),
+          fetch(`${API_BASE}/categories`),
+          fetch(`${API_BASE}/keywords`),
+          fetch(`${API_BASE}/recent-posts`)
+        ]);
 
-  const keywordData = [
-    { keyword: 'performance', count: 23, sentiment: 0.65 },
-    { keyword: 'daily limits', count: 18, sentiment: 0.42 },
-    { keyword: 'bugs', count: 15, sentiment: 0.38 },
-    { keyword: 'service degradation', count: 12, sentiment: 0.35 },
-    { keyword: 'helpful', count: 31, sentiment: 0.85 },
-    { keyword: 'improved', count: 14, sentiment: 0.82 }
-  ];
+        // Parse responses
+        const currentData = await currentRes.json();
+        const hourlyDataRaw = await hourlyRes.json();
+        const categoriesDataRaw = await categoriesRes.json();
+        const keywordsDataRaw = await keywordsRes.json();
+        const postsDataRaw = await postsRes.json();
 
-  const recentPosts = [
-    { id: 1, subreddit: 'r/ClaudeAI', title: 'Claude has been amazing for coding lately', sentiment: 0.89, category: 'Web Interface', time: '2h ago' },
-    { id: 2, subreddit: 'r/Anthropic', title: 'Daily limits seem lower than before', sentiment: 0.23, category: 'Web Interface', time: '3h ago' },
-    { id: 3, subreddit: 'r/ClaudeCode', title: 'Love the new CLI features!', sentiment: 0.91, category: 'Claude Code', time: '4h ago' },
-    { id: 4, subreddit: 'r/ClaudeAI', title: 'API responses slower today?', sentiment: 0.34, category: 'API', time: '5h ago' },
-    { id: 5, subreddit: 'r/Anthropic', title: 'Claude helped me debug a complex issue', sentiment: 0.87, category: 'General', time: '6h ago' }
-  ];
+        // Update state
+        setCurrentSentiment(currentData.avg_sentiment || 0.5);
+        setHourlyData(hourlyDataRaw || []);
+        setCategoryData(categoriesDataRaw || []);
+        setKeywordData(keywordsDataRaw || []);
+        setRecentPosts(postsDataRaw || []);
+
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    
+    // Refresh data every 5 minutes
+    const interval = setInterval(fetchData, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const getSentimentColor = (sentiment: number) => {
     if (sentiment >= 0.7) return '#22c55e'; // Light green - positive
@@ -184,7 +185,28 @@ const Claudometer = () => {
           </select>
         </div>
 
+        {/* Loading/Error States */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="text-2xl font-semibold" style={{ color: '#8b4513' }}>
+              Loading sentiment data...
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center py-12">
+            <div className="text-2xl font-semibold text-red-600">
+              {error}
+            </div>
+            <div className="text-sm mt-2" style={{ color: '#9f6841' }}>
+              Please try refreshing the page
+            </div>
+          </div>
+        )}
+
         {/* Main Dashboard */}
+        {!loading && !error && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
           {/* Sentiment Meter */}
           <div className="lg:col-span-1">
@@ -396,6 +418,7 @@ const Claudometer = () => {
             ))}
           </div>
         </div>
+        )}
 
         {/* Footer */}
         <div className="text-center mt-12 text-sm">

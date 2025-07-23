@@ -103,13 +103,12 @@ CREATE TABLE posts (
 CREATE TABLE comments (
   id TEXT PRIMARY KEY,
   post_id TEXT,
-  content TEXT,
-  subreddit TEXT,
-  created_at TEXT,
+  body TEXT,
   score INTEGER,
   sentiment REAL,
   category TEXT,
   keywords TEXT,
+  created_at TEXT,
   processed_at TEXT
 );
 
@@ -118,6 +117,8 @@ CREATE TABLE sentiment_hourly (
   hour TEXT PRIMARY KEY,
   avg_sentiment REAL,
   post_count INTEGER,
+  category_breakdown TEXT,
+  keyword_counts TEXT,
   comment_count INTEGER,
   weighted_sentiment REAL
 );
