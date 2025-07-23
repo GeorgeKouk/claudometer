@@ -253,10 +253,10 @@ async function fetchRedditPosts(env) {
   
   for (const subreddit of subreddits) {
     try {
-      console.log(`Fetching 20 posts from r/${subreddit}`);
+      console.log(`Fetching 30 posts from r/${subreddit}`);
       
       // Fetch posts
-      const response = await fetch(`https://oauth.reddit.com/r/${subreddit}/hot?limit=20`, {
+      const response = await fetch(`https://oauth.reddit.com/r/${subreddit}/hot?limit=30`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
@@ -287,8 +287,6 @@ async function fetchRedditPosts(env) {
       // Fetch comments for each post
       for (const post of posts) {
         try {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 sec delay
-          
           console.log(`Fetching comments for post ${post.id}`);
           
           const commentsResponse = await fetch(
@@ -328,9 +326,6 @@ async function fetchRedditPosts(env) {
           console.error(`Error fetching comments for ${post.id}:`, commentError.message);
         }
       }
-      
-      // 3 second delay between subreddits
-      await new Promise(resolve => setTimeout(resolve, 3000));
       
     } catch (error) {
       console.error(`Error fetching r/${subreddit}:`, error.message);
