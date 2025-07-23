@@ -199,11 +199,17 @@ async function getRecentPosts(env) {
 async function collectRedditData(env) {
   try {
     console.log('Starting Reddit data collection...');
+    console.log('Environment check:', {
+      hasRedditClientId: !!env.REDDIT_CLIENT_ID,
+      hasRedditClientSecret: !!env.REDDIT_CLIENT_SECRET,
+      hasOpenAiKey: !!env.OPENAI_API_KEY
+    });
     
     const { posts, comments } = await fetchRedditPosts(env);
     console.log(`Fetched ${posts.length} posts, ${comments.length} comments`);
     
     if (posts.length === 0) {
+      console.error('ERROR: No posts fetched from Reddit - check API credentials');
       return new Response('No posts fetched from Reddit');
     }
     
@@ -224,6 +230,7 @@ async function collectRedditData(env) {
 }
 
 async function getRedditAccessToken(env) {
+  console.log('Getting Reddit access token...');
   const auth = btoa(`${env.REDDIT_CLIENT_ID}:${env.REDDIT_CLIENT_SECRET}`);
   
   const response = await fetch('https://www.reddit.com/api/v1/access_token', {
@@ -237,10 +244,17 @@ async function getRedditAccessToken(env) {
   });
   
   if (!response.ok) {
+    const errorBody = await response.text();
+    console.error('Reddit auth failed:', {
+      status: response.status,
+      statusText: response.statusText, 
+      body: errorBody
+    });
     throw new Error(`Reddit auth failed: ${response.status}`);
   }
   
   const data = await response.json();
+  console.log('Reddit auth successful, token obtained');
   return data.access_token;
 }
 
@@ -336,8 +350,11 @@ async function fetchRedditPosts(env) {
 }
 
 async function analyzeWithOpenAI(posts, apiKey) {
+  console.log(`analyzeWithOpenAI called with ${posts.length} posts`);
+  console.log('API Key status:', apiKey ? `Present (${apiKey.substring(0, 10)}...)` : 'MISSING');
+  
   if (!apiKey) {
-    console.error('No OpenAI API key provided');
+    console.error('CRITICAL: No OpenAI API key provided - returning default values');
     return posts.map(post => ({
       ...post,
       sentiment: 0.5,
@@ -385,7 +402,13 @@ Keywords: max 3 relevant keywords`
       });
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
+        const errorBody = await response.text();
+        console.error(`OpenAI API Error Details:`, {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorBody
+        });
+        throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`);
       }
 
       const result = await response.json();
@@ -413,7 +436,11 @@ Keywords: max 3 relevant keywords`
       await new Promise(resolve => setTimeout(resolve, 1000));
 
     } catch (error) {
-      console.error('Analysis error:', error);
+      console.error(`Analysis error for post "${post.title}":`, {
+        error: error.message,
+        stack: error.stack,
+        postId: post.id
+      });
       analyzed.push({
         ...post,
         sentiment: 0.5,
@@ -427,7 +454,10 @@ Keywords: max 3 relevant keywords`
 }
 
 async function storeInDatabase(posts, comments, env) {
+  console.log(`storeInDatabase called with ${posts.length} posts, ${comments.length} comments`);
+  
   if (!env.DB) {
+    console.error('CRITICAL: Database not available');
     throw new Error('Database not available');
   }
 
@@ -499,9 +529,15 @@ async function storeInDatabase(posts, comments, env) {
       weightedAvgSentiment
     ).run();
 
-    console.log(`Stored ${posts.length} posts and ${comments.length} comments`);
+    console.log(`Successfully stored ${posts.length} posts and ${comments.length} comments`);
+    console.log('Weighted sentiment calculated:', weightedAvgSentiment);
   } catch (error) {
-    console.error('Database storage error:', error);
+    console.error('Database storage error:', {
+      error: error.message,
+      stack: error.stack,
+      postsCount: posts.length,
+      commentsCount: comments.length
+    });
     throw error;
   }
 }
