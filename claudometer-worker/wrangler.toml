@@ -16,3 +16,7 @@ database_id = "a9446fa9-c70d-496f-b9e5-a636e72e8865"
 # Cron trigger for hourly data collection
 [triggers]
 crons = ["0 * * * *"]
+
+# Enable logging for debugging
+[observability.logs]
+enabled = true
