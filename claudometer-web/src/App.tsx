@@ -4,13 +4,13 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 const Claudometer = () => {
   const [timeframe, setTimeframe] = useState('24h');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [currentSentiment, setCurrentSentiment] = useState(0.5);
-  const [hourlyData, setHourlyData] = useState([]);
-  const [categoryData, setCategoryData] = useState([]);
-  const [keywordData, setKeywordData] = useState([]);
-  const [recentPosts, setRecentPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [currentSentiment, setCurrentSentiment] = useState<number>(0.5);
+  const [hourlyData, setHourlyData] = useState<any[]>([]);
+  const [categoryData, setCategoryData] = useState<any[]>([]);
+  const [keywordData, setKeywordData] = useState<any[]>([]);
+  const [recentPosts, setRecentPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   const API_BASE = 'https://claudometer-api.georgekouk.workers.dev/api';
 
