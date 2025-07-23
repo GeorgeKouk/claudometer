@@ -21,14 +21,22 @@ const Claudometer = () => {
         setLoading(true);
         setError(null);
         
-        // Fetch all data in parallel
-        const [currentRes, hourlyRes, categoriesRes, keywordsRes, postsRes] = await Promise.all([
-          fetch(`${API_BASE}/current-sentiment`),
-          fetch(`${API_BASE}/hourly-data`),
-          fetch(`${API_BASE}/categories`),
-          fetch(`${API_BASE}/keywords`),
-          fetch(`${API_BASE}/recent-posts`)
-        ]);
+        // Fetch data with delays to avoid overloading API
+        const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+        
+        const currentRes = await fetch(`${API_BASE}/current-sentiment`);
+        await delay(200);
+        
+        const hourlyRes = await fetch(`${API_BASE}/hourly-data`);
+        await delay(200);
+        
+        const categoriesRes = await fetch(`${API_BASE}/categories`);
+        await delay(200);
+        
+        const keywordsRes = await fetch(`${API_BASE}/keywords`);
+        await delay(200);
+        
+        const postsRes = await fetch(`${API_BASE}/recent-posts`);
 
         // Parse responses
         const currentData = await currentRes.json();
@@ -270,8 +278,10 @@ const Claudometer = () => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Category and Keyword Analysis */}
+        {!loading && !error && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
           {/* Category Breakdown */}
           <div className="rounded-2xl shadow-lg border p-8" style={{ 
@@ -372,8 +382,10 @@ const Claudometer = () => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Recent Posts */}
+        {!loading && !error && (
         <div className="rounded-2xl shadow-lg border p-8" style={{ 
           backgroundColor: 'rgba(255, 255, 255, 0.85)',
           borderColor: 'rgba(212, 163, 127, 0.3)'
