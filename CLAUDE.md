@@ -71,6 +71,12 @@ REDDIT_CLIENT_SECRET=your_reddit_client_secret
 OPENAI_API_KEY=your_openai_api_key
 ```
 
+### Reddit API Setup
+- **Bot Account**: `claudometer_bot` (dedicated Reddit account for API access)
+- **App Type**: Script (uses client credentials flow)
+- **User-Agent**: `Claudometer/1.0.0 by /u/claudometer_bot`
+- **Monitored Subreddits**: r/Anthropic, r/ClaudeAI, r/ClaudeCode
+
 ### Database Configuration
 - **Type**: Cloudflare D1 SQLite database
 - **Name**: `claudometer-db`
@@ -205,6 +211,21 @@ wrangler secret put OPENAI_API_KEY
 - **Worker Logs**: Available in Cloudflare dashboard
 - **Pages Deployment**: Check build logs in Cloudflare Pages
 - **Database Queries**: Monitor via Cloudflare D1 console
+
+## Deployed URLs
+
+### Production Environment
+- **Web Application**: https://claudometer.pages.dev
+- **API Backend**: https://claudometer-api.georgekouk.workers.dev/api/
+
+### API Endpoints (Production)
+- Health check: https://claudometer-api.georgekouk.workers.dev/
+- Current sentiment: https://claudometer-api.georgekouk.workers.dev/api/current-sentiment
+- Hourly data: https://claudometer-api.georgekouk.workers.dev/api/hourly-data
+- Categories: https://claudometer-api.georgekouk.workers.dev/api/categories
+- Keywords: https://claudometer-api.georgekouk.workers.dev/api/keywords
+- Recent posts: https://claudometer-api.georgekouk.workers.dev/api/recent-posts
+- Manual data collection: https://claudometer-api.georgekouk.workers.dev/api/collect-data
 
 ## Support Resources
 - [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)

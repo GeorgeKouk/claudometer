@@ -231,7 +231,7 @@ async function getRedditAccessToken(env) {
     headers: {
       'Authorization': `Basic ${auth}`,
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'Claudometer/1.0.0 by /u/yourusername'
+      'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
     },
     body: 'grant_type=client_credentials'
   });
@@ -259,7 +259,7 @@ async function fetchRedditPosts(env) {
       const response = await fetch(`https://oauth.reddit.com/r/${subreddit}/hot?limit=20`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'User-Agent': 'Claudometer/1.0.0 by /u/yourusername'
+          'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
         }
       });
 
@@ -296,7 +296,7 @@ async function fetchRedditPosts(env) {
             {
               headers: {
                 'Authorization': `Bearer ${accessToken}`,
-                'User-Agent': 'Claudometer/1.0.0 by /u/yourusername'
+                'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
               }
             }
           );
