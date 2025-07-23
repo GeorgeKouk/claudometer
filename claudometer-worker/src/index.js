@@ -216,8 +216,8 @@ async function collectRedditData(env) {
     // Analyze posts with OpenAI (limit to 10 for cost control)
     const analyzedPosts = await analyzeWithOpenAI(posts.slice(0, 10), env.OPENAI_API_KEY);
     
-    // Analyze comments with OpenAI (limit to 15 for cost control) 
-    const analyzedComments = await analyzeWithOpenAI(comments.slice(0, 15), env.OPENAI_API_KEY);
+    // Analyze comments with OpenAI (limit to 5 for cost control) 
+    const analyzedComments = await analyzeWithOpenAI(comments.slice(0, 5), env.OPENAI_API_KEY);
     
     // Store both in database
     await storeInDatabase(analyzedPosts, analyzedComments, env);
@@ -267,10 +267,10 @@ async function fetchRedditPosts(env) {
   
   for (const subreddit of subreddits) {
     try {
-      console.log(`Fetching 30 posts from r/${subreddit}`);
+      console.log(`Fetching 10 posts from r/${subreddit}`);
       
       // Fetch posts
-      const response = await fetch(`https://oauth.reddit.com/r/${subreddit}/hot?limit=30`, {
+      const response = await fetch(`https://oauth.reddit.com/r/${subreddit}/hot?limit=10`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
@@ -284,8 +284,14 @@ async function fetchRedditPosts(env) {
 
       const data = await response.json();
       
+      // Check if Reddit response has expected structure
+      if (!data || !data.data || !data.data.children) {
+        console.error(`Invalid Reddit response structure for r/${subreddit}`);
+        continue;
+      }
+      
       const posts = data.data.children
-        .filter(post => post.data && (post.data.selftext || post.data.title))
+        .filter(post => post && post.data && post.data.id && (post.data.selftext || post.data.title))
         .map(post => ({
           id: post.data.id,
           title: post.data.title || '',
@@ -354,23 +360,31 @@ async function analyzeWithOpenAI(posts, apiKey) {
   console.log('API Key status:', apiKey ? `Present (${apiKey.substring(0, 10)}...)` : 'MISSING');
   
   if (!apiKey) {
-    console.error('CRITICAL: No OpenAI API key provided - returning default values');
-    return posts.map(post => ({
-      ...post,
-      sentiment: 0.5,
-      category: 'General',
-      keywords: JSON.stringify(['general'])
-    }));
+    console.error('CRITICAL: No OpenAI API key provided - throwing error');
+    throw new Error('OpenAI API key not configured');
   }
 
   const analyzed = [];
 
   for (const post of posts) {
     try {
-      const text = `${post.title} ${post.content}`.trim();
-      if (!text) continue;
+      // Skip if post is null/undefined or missing required fields
+      if (!post || !post.id) {
+        console.log('Skipping invalid post object');
+        continue;
+      }
+      
+      const title = post.title || '';
+      const content = post.content || '';
+      const text = `${title} ${content}`.trim();
+      
+      if (!text || text === 'undefined undefined' || text === 'undefined' || text.length < 5) {
+        console.log(`Skipping post ${post.id} - insufficient text content`);
+        continue;
+      }
 
-      console.log(`Analyzing post: ${post.title.substring(0, 50)}...`);
+      const displayTitle = (post && post.title) ? post.title : 'Untitled';
+      console.log(`Analyzing post: ${displayTitle.substring(0, 50)}...`);
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -408,21 +422,29 @@ Keywords: max 3 relevant keywords`
           statusText: response.statusText,
           body: errorBody
         });
-        throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`);
+        
+        // Skip post if rate limited or other API error
+        if (response.status === 429) {
+          console.log('Rate limited, skipping remaining posts');
+          break;
+        }
+        throw new Error(`OpenAI API error: ${response.status}`);
       }
 
       const result = await response.json();
       let analysis;
       
+      // Check if response has expected structure
+      if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+        console.error('Unexpected OpenAI response structure:', result);
+        continue;
+      }
+      
       try {
         analysis = JSON.parse(result.choices[0].message.content);
       } catch (parseError) {
         console.error('Failed to parse OpenAI response:', result.choices[0].message.content);
-        analysis = {
-          sentiment: 0.5,
-          category: 'General',
-          keywords: ['general']
-        };
+        continue;
       }
 
       analyzed.push({
@@ -436,17 +458,13 @@ Keywords: max 3 relevant keywords`
       await new Promise(resolve => setTimeout(resolve, 1000));
 
     } catch (error) {
-      console.error(`Analysis error for post "${post.title}":`, {
+      console.error(`Analysis error for post "${post.title || 'Untitled'}":`, {
         error: error.message,
         stack: error.stack,
         postId: post.id
       });
-      analyzed.push({
-        ...post,
-        sentiment: 0.5,
-        category: 'General',
-        keywords: JSON.stringify(['general'])
-      });
+      // Skip failed posts instead of adding mock data
+      continue;
     }
   }
 
