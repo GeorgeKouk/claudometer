@@ -1,0 +1,18 @@
+name = "claudometer-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Environment variables (you'll need to set these via wrangler secret put)
+# REDDIT_CLIENT_ID
+# REDDIT_CLIENT_SECRET  
+# OPENAI_API_KEY
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "claudometer-db"
+database_id = "a9446fa9-c70d-496f-b9e5-a636e72e8865"
+
+# Cron trigger for hourly data collection
+[triggers]
+crons = ["0 * * * *"]
