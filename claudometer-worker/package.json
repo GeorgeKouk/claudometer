@@ -7,10 +7,16 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
-  "keywords": ["cloudflare", "worker", "reddit", "sentiment", "api"],
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "reddit",
+    "sentiment",
+    "api"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^4.25.1"
   }
 }

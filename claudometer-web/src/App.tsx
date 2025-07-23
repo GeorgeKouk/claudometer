@@ -161,8 +161,7 @@ const Claudometer = () => {
             className="px-6 py-3 border-0 rounded-xl shadow-sm font-medium focus:ring-2 focus:outline-none transition-all"
             style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.9)', 
-              color: '#8b4513',
-              focusRingColor: '#d4a37f'
+              color: '#8b4513'
             }}
           >
             <option value="24h">Last 24 Hours</option>
@@ -227,7 +226,7 @@ const Claudometer = () => {
                     axisLine={{ stroke: '#ead1bf' }}
                   />
                   <Tooltip 
-                    formatter={(value) => [(value * 100).toFixed(1) + '%', 'Sentiment']}
+                    formatter={(value) => [(Number(value) * 100).toFixed(1) + '%', 'Sentiment']}
                     labelStyle={{ color: '#8b4513' }}
                     contentStyle={{ 
                       backgroundColor: 'rgba(255, 255, 255, 0.95)', 
