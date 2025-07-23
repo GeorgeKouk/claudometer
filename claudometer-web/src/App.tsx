@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import React, { useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const Claudometer = () => {
   const [timeframe, setTimeframe] = useState('24h');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [currentSentiment, setCurrentSentiment] = useState(0.72);
+  const currentSentiment = 0.72;
 
   // Mock data - in real implementation, this would come from your Reddit API + AI analysis
   const hourlyData = [

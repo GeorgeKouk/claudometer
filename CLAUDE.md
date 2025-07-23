@@ -123,7 +123,7 @@ CREATE TABLE sentiment_hourly (
 1. **Repository**: Connected to GitHub repo
 2. **Root Directory**: `claudometer-web`
 3. **Framework**: Create React App
-4. **Build Command**: `npm run build`
+4. **Build Command**: `npm run build` (NOT `react-scripts build`)
 5. **Output Directory**: `build`
 
 ### Cloudflare Workers Setup
