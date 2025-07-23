@@ -308,7 +308,7 @@ const Claudometer = () => {
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="w-40% space-y-3">
+              <div className="w-2/5 space-y-3">
                 {categoryData.map((item, index) => (
                   <div key={item.name} className="flex items-center">
                     <div 
