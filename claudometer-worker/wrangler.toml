@@ -1,6 +1,6 @@
-name = "claudometer-worker"
+name = "claudometer-api"
 main = "src/index.js"
-compatibility_date = "2024-01-01"
+compatibility_date = "2025-07-23"
 
 # Environment variables (you'll need to set these via wrangler secret put)
 # REDDIT_CLIENT_ID
