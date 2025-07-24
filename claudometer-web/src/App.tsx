@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const Claudometer = () => {
   const [timeframe, setTimeframe] = useState('24h');
-  const [selectedCategory, setSelectedCategory] = useState('all');
   const [currentSentiment, setCurrentSentiment] = useState<number>(0.5);
   const [hourlyData, setHourlyData] = useState<any[]>([]);
-  const [categoryData, setCategoryData] = useState<any[]>([]);
+  const [topicData, setTopicData] = useState<any[]>([]);
   const [keywordData, setKeywordData] = useState<any[]>([]);
   const [recentPosts, setRecentPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -14,47 +13,9 @@ const Claudometer = () => {
   const [nextRefresh, setNextRefresh] = useState<Date | null>(null);
 
   // Store raw data for filtering
-  const [rawRecentPosts, setRawRecentPosts] = useState<any[]>([]);
-  const [rawCategoryData, setRawCategoryData] = useState<any[]>([]);
-  const [rawKeywordData, setRawKeywordData] = useState<any[]>([]);
-  const [filteredSentiment, setFilteredSentiment] = useState<number>(0.5);
 
   const API_BASE = 'https://claudometer-api.georgekouk.workers.dev/api';
 
-  // Apply category filtering to data
-  const applyFiltering = useCallback((rawPosts: any[], rawCategories: any[], rawKeywords: any[], selectedCat: string) => {
-    if (selectedCat === 'all') {
-      setRecentPosts(rawPosts);
-      setCategoryData(rawCategories);
-      setKeywordData(rawKeywords);
-      setFilteredSentiment(currentSentiment);
-      return;
-    }
-
-    // Filter posts by category
-    const categoryMatch = selectedCat === 'web' ? 'Web Interface' : 
-                         selectedCat === 'code' ? 'Claude Code' : 
-                         selectedCat === 'api' ? 'API' : 
-                         selectedCat;
-
-    const filteredPosts = rawPosts.filter(post => post.category === categoryMatch);
-
-    // Calculate filtered sentiment from filtered posts
-    const avgSentiment = filteredPosts.length > 0 
-      ? filteredPosts.reduce((sum, post) => sum + post.sentiment, 0) / filteredPosts.length
-      : 0.5;
-
-    // Filter and recalculate category data
-    const filteredCategories = rawCategories.filter(cat => cat.name === categoryMatch);
-
-    // For keywords, show all for now since we don't have category-specific keyword data
-    const filteredKeywords = rawKeywords;
-
-    setRecentPosts(filteredPosts);
-    setCategoryData(filteredCategories);
-    setKeywordData(filteredKeywords);
-    setFilteredSentiment(avgSentiment);
-  }, [currentSentiment]);
 
   // Calculate next refresh time (3 minutes after each hour)
   const getNextRefreshTime = () => {
@@ -80,7 +41,7 @@ const Claudometer = () => {
         const hourlyRes = await fetch(`${API_BASE}/hourly-data`);
         await delay(200);
         
-        const categoriesRes = await fetch(`${API_BASE}/categories`);
+        const topicsRes = await fetch(`${API_BASE}/topics`);
         await delay(200);
         
         const keywordsRes = await fetch(`${API_BASE}/keywords`);
@@ -91,7 +52,7 @@ const Claudometer = () => {
         // Parse responses
         const currentData = await currentRes.json();
         const hourlyDataRaw = await hourlyRes.json();
-        const categoriesDataRaw = await categoriesRes.json();
+        const topicsDataRaw = await topicsRes.json();
         const keywordsDataRaw = await keywordsRes.json();
         const postsDataRaw = await postsRes.json();
 
@@ -105,12 +66,10 @@ const Claudometer = () => {
           const dateB = new Date(b.created_at || b.time);
           return dateB.getTime() - dateA.getTime();
         });
-        setRawCategoryData(categoriesDataRaw || []);
-        setRawKeywordData(keywordsDataRaw || []);
-        setRawRecentPosts(sortedPosts);
-        
-        // Apply current filtering
-        applyFiltering(postsDataRaw || [], categoriesDataRaw || [], keywordsDataRaw || [], selectedCategory);
+        // Set data directly
+        setRecentPosts(sortedPosts);
+        setTopicData(topicsDataRaw || []);
+        setKeywordData(keywordsDataRaw || []);
 
         // Update next refresh time
         setNextRefresh(getNextRefreshTime());
@@ -143,12 +102,7 @@ const Claudometer = () => {
 
     const timeoutId = scheduleNextFetch();
     return () => clearTimeout(timeoutId);
-  }, [applyFiltering, selectedCategory]);
-
-  // Apply filtering when selected category changes
-  useEffect(() => {
-    applyFiltering(rawRecentPosts, rawCategoryData, rawKeywordData, selectedCategory);
-  }, [selectedCategory, rawRecentPosts, rawCategoryData, rawKeywordData, applyFiltering]);
+  }, []);
 
   const getSentimentColor = (sentiment: number) => {
     if (sentiment >= 0.6) return '#22c55e'; // Green - positive
@@ -217,13 +171,6 @@ const Claudometer = () => {
     );
   };
 
-  // Category colors - semantically meaningful and distinct from warm theme
-  const COLORS = [
-    '#3b82f6', // Bright blue for Web Interface (web/browser association)
-    '#8b5cf6', // Purple for Claude Code (developer/terminal association) 
-    '#059669', // Emerald green for API (technical/data association)
-    '#f59e0b'  // Amber/orange for General (warm, approachable)
-  ];
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fbf6f2 0%, #f6ede5 50%, #ead1bf 100%)' }}>
@@ -254,41 +201,38 @@ const Claudometer = () => {
           )}
         </div>
 
-        {/* Controls */}
-        <div className="flex justify-center gap-4 mb-10">
-          <select 
-            value={timeframe} 
-            onChange={(e) => setTimeframe(e.target.value)}
-            className="px-6 py-3 border-0 rounded-2xl shadow-lg font-medium focus:ring-4 focus:outline-none transition-all duration-300 hover:shadow-xl hover:scale-105 cursor-pointer"
-            style={{ 
-              backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-              color: '#8b4513',
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(251, 246, 242, 0.95) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(212, 163, 127, 0.2)'
-            }}
-          >
-            <option value="24h">📊 Last 24 Hours</option>
-            <option value="7d">📈 Last 7 Days</option>
-            <option value="30d">📉 Last 30 Days</option>
-          </select>
-          <select 
-            value={selectedCategory} 
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-6 py-3 border-0 rounded-2xl shadow-lg font-medium focus:ring-4 focus:outline-none transition-all duration-300 hover:shadow-xl hover:scale-105 cursor-pointer"
-            style={{ 
-              backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-              color: '#8b4513',
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(251, 246, 242, 0.95) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(212, 163, 127, 0.2)'
-            }}
-          >
-            <option value="all">🔍 All Categories</option>
-            <option value="web">🌐 Web Interface</option>
-            <option value="code">💻 Claude Code</option>
-            <option value="api">⚡ API</option>
-          </select>
+        {/* Time Range Controls */}
+        <div className="flex justify-center gap-3 mb-10">
+          {[
+            { value: '24h', label: 'Last 24 Hours' },
+            { value: '7d', label: 'Last 7 Days' },
+            { value: '30d', label: 'Last 30 Days' }
+          ].map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setTimeframe(option.value)}
+              className={`px-6 py-3 rounded-2xl shadow-lg font-medium transition-all duration-300 hover:shadow-xl hover:scale-105 focus:ring-4 focus:outline-none ${
+                timeframe === option.value 
+                  ? 'ring-2 ring-opacity-50 transform scale-105' 
+                  : ''
+              }`}
+              style={{ 
+                backgroundColor: timeframe === option.value 
+                  ? 'rgba(255, 255, 255, 1)' 
+                  : 'rgba(255, 255, 255, 0.85)',
+                color: '#8b4513',
+                background: timeframe === option.value
+                  ? 'linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(251, 246, 242, 1) 100%)'
+                  : 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(251, 246, 242, 0.85) 100%)',
+                backdropFilter: 'blur(10px)',
+                border: timeframe === option.value 
+                  ? '2px solid rgba(212, 163, 127, 0.5)'
+                  : '1px solid rgba(212, 163, 127, 0.2)'
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
         {/* Loading/Error States */}
@@ -321,13 +265,11 @@ const Claudometer = () => {
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
               <h3 className="text-xl font-semibold text-center mb-6" style={{ color: '#8b4513' }}>
-                {selectedCategory === 'all' ? 'Current Community Sentiment' : 'Current Category Sentiment'}
+                Current Community Sentiment
               </h3>
-              <SentimentMeter value={selectedCategory === 'all' ? currentSentiment : filteredSentiment} />
+              <SentimentMeter value={currentSentiment} />
               <div className="text-center text-sm font-medium mt-2" style={{ color: '#9f6841' }}>
-                Based on {selectedCategory === 'all' 
-                  ? hourlyData.reduce((sum, d) => sum + d.posts, 0) 
-                  : recentPosts.length} posts/comments
+                Based on {hourlyData.reduce((sum, d) => sum + d.posts, 0)} posts/comments
               </div>
             </div>
           </div>
@@ -396,13 +338,13 @@ const Claudometer = () => {
             borderColor: 'rgba(212, 163, 127, 0.3)'
           }}>
             <h3 className="text-xl font-semibold mb-6" style={{ color: '#8b4513' }}>
-              Category Breakdown
+              Topic Breakdown
             </h3>
             <div className="flex items-center">
               <ResponsiveContainer width="60%" height={220}>
                 <PieChart>
                   <Pie
-                    data={categoryData}
+                    data={topicData}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -410,8 +352,8 @@ const Claudometer = () => {
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    {topicData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || '#B8A082'} />
                     ))}
                   </Pie>
                   <Tooltip 
@@ -426,11 +368,11 @@ const Claudometer = () => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="w-2/5 space-y-3">
-                {categoryData.map((item, index) => (
+                {topicData.map((item, index) => (
                   <div key={item.name} className="flex items-center">
                     <div 
                       className="w-4 h-4 rounded-full mr-3 shadow-sm" 
-                      style={{ backgroundColor: COLORS[index] }}
+                      style={{ backgroundColor: item.color || '#B8A082' }}
                     ></div>
                     <div className="flex-1">
                       <div className="text-sm font-semibold" style={{ color: '#8b4513' }}>

@@ -194,6 +194,7 @@ wrangler secret put OPENAI_API_KEY
 
 ### Common Issues
 - **Build Failures**: Check that `claudometer-web` directory contains proper React app
+- **ESLint Errors in CI**: CI treats ESLint warnings as errors (`process.env.CI = true`). Fix all React hooks exhaustive-deps warnings by using `useCallback` for functions and adding proper dependencies to useEffect arrays
 - **Worker Errors**: Verify all secrets are set in Cloudflare dashboard
 - **Database Issues**: Ensure D1 database is created and bound correctly
 - **API Failures**: Check Reddit API credentials and rate limits

@@ -31,7 +31,9 @@ export default {
       } else if (path === '/api/hourly-data') {
         return await getHourlyData(env);
       } else if (path === '/api/categories') {
-        return await getCategoryData(env);
+        return await getTopicData(env);
+      } else if (path === '/api/topics') {
+        return await getTopicData(env);
       } else if (path === '/api/keywords') {
         return await getKeywordData(env);
       } else if (path === '/api/recent-posts') {
@@ -157,6 +159,59 @@ async function getCategoryData(env) {
   }
 }
 
+async function getTopicData(env) {
+  try {
+    // Get topics with post/comment counts and weighted sentiment
+    const stmt = env.DB.prepare(`
+      SELECT 
+        t.name,
+        t.color,
+        t.post_count,
+        COALESCE(posts_data.post_count, 0) as recent_post_count,
+        COALESCE(comments_data.comment_count, 0) as recent_comment_count,
+        COALESCE(
+          (posts_data.weighted_post_sentiment + comments_data.total_comment_sentiment) / 
+          (posts_data.post_count * 3 + comments_data.comment_count), 
+          0.5
+        ) as avg_sentiment
+      FROM topics t
+      LEFT JOIN (
+        SELECT topic_id, COUNT(*) as post_count, SUM(sentiment * 3) as weighted_post_sentiment
+        FROM posts 
+        WHERE processed_at > datetime("now", "-24 hours") AND topic_id IS NOT NULL
+        GROUP BY topic_id
+      ) posts_data ON t.id = posts_data.topic_id
+      LEFT JOIN (
+        SELECT topic_id, COUNT(*) as comment_count, SUM(sentiment) as total_comment_sentiment
+        FROM comments 
+        WHERE processed_at > datetime("now", "-24 hours") AND topic_id IS NOT NULL
+        GROUP BY topic_id
+      ) comments_data ON t.id = comments_data.topic_id
+      WHERE recent_post_count > 0 OR recent_comment_count > 0
+      ORDER BY (recent_post_count * 3 + recent_comment_count) DESC
+    `);
+    
+    const results = await stmt.all();
+    const total = results.results.reduce((sum, row) => sum + (row.recent_post_count * 3 + row.recent_comment_count), 0);
+    
+    const topicData = results.results.map(row => ({
+      name: row.name,
+      value: total > 0 ? Math.round(((row.recent_post_count * 3 + row.recent_comment_count) / total) * 100) : 0,
+      sentiment: row.avg_sentiment || 0.5,
+      color: row.color || '#B8A082'
+    }));
+    
+    return new Response(JSON.stringify(topicData), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    console.error('Error in getTopicData:', error);
+    return new Response(JSON.stringify([]), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
 async function getKeywordData(env) {
   try {
     // Get keywords from both posts and comments - strict count basis (no weighting for counts)
@@ -243,7 +298,12 @@ async function getKeywordData(env) {
 
 async function getRecentPosts(env) {
   try {
-    const stmt = env.DB.prepare('SELECT title, subreddit, sentiment, category, created_at FROM posts ORDER BY processed_at DESC LIMIT 10');
+    const stmt = env.DB.prepare(`
+      SELECT p.title, p.subreddit, p.sentiment, p.created_at, t.name as topic
+      FROM posts p
+      LEFT JOIN topics t ON p.topic_id = t.id
+      ORDER BY p.processed_at DESC LIMIT 10
+    `);
     const results = await stmt.all();
     
     const recentPosts = results.results.map((row, index) => ({
@@ -251,7 +311,7 @@ async function getRecentPosts(env) {
       subreddit: `r/${row.subreddit}`,
       title: row.title,
       sentiment: row.sentiment || 0.5,
-      category: row.category || 'General',
+      category: row.topic || 'Features',
       time: getTimeAgo(row.created_at)
     }));
     
@@ -477,11 +537,13 @@ Text: "${truncatedText}"
 JSON format:
 {
   "sentiment": 0.75,
-  "category": "Web Interface",
-  "keywords": ["performance", "helpful"]
+  "topic": "Performance",
+  "keywords": ["optimization", "speed"]
 }
 
-Categories: Web Interface, Claude Code, API, General
+Available Topics: Authentication, Performance, Integration, Troubleshooting, Features, Documentation, Comparison, Tutorial, Feedback, Pricing
+- Choose the BEST fitting topic from the list above
+- Only suggest a new single word topic if none of the above fit
 Sentiment: 0.0-1.0 where 0.5 is neutral
 Keywords: max 3 relevant keywords`
           }]
@@ -520,10 +582,14 @@ Keywords: max 3 relevant keywords`
         continue;
       }
 
+      // Get or create topic
+      const topicId = await getOrCreateTopic(analysis.topic || 'Features', env);
+
       analyzed.push({
         ...post,
         sentiment: Math.max(0, Math.min(1, analysis.sentiment || 0.5)),
-        category: analysis.category || 'General',
+        topic_id: topicId,
+        topic: analysis.topic || 'Features'
         keywords: JSON.stringify(analysis.keywords || ['general'])
       });
 
@@ -557,7 +623,7 @@ async function storeInDatabase(posts, comments, env) {
     for (const post of posts) {
       const stmt = env.DB.prepare(`
         INSERT OR REPLACE INTO posts 
-        (id, title, content, subreddit, created_at, score, sentiment, category, keywords, processed_at)
+        (id, title, content, subreddit, created_at, score, sentiment, keywords, topic_id, processed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
       
@@ -569,8 +635,8 @@ async function storeInDatabase(posts, comments, env) {
         post.created_at,
         post.score,
         post.sentiment,
-        post.category,
-        post.keywords
+        post.keywords,
+        post.topic_id
       ).run();
     }
 
@@ -578,7 +644,7 @@ async function storeInDatabase(posts, comments, env) {
     for (const comment of comments) {
       const stmt = env.DB.prepare(`
         INSERT OR REPLACE INTO comments 
-        (id, post_id, body, subreddit, score, sentiment, category, keywords, created_at, processed_at)
+        (id, post_id, body, subreddit, score, sentiment, keywords, topic_id, created_at, processed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
       
@@ -589,8 +655,8 @@ async function storeInDatabase(posts, comments, env) {
         comment.subreddit,
         comment.score,
         comment.sentiment,
-        comment.category,
         comment.keywords,
+        comment.topic_id,
         comment.created_at
       ).run();
     }
@@ -640,6 +706,32 @@ function getCorsHeaders() {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
+}
+
+async function getOrCreateTopic(topicName, env) {
+  try {
+    // First, try to find existing topic
+    const selectStmt = env.DB.prepare('SELECT id FROM topics WHERE name = ?');
+    const existingTopic = await selectStmt.bind(topicName).first();
+    
+    if (existingTopic) {
+      // Update usage count
+      const updateStmt = env.DB.prepare('UPDATE topics SET post_count = post_count + 1 WHERE id = ?');
+      await updateStmt.bind(existingTopic.id).run();
+      return existingTopic.id;
+    }
+    
+    // Create new topic if it doesn't exist
+    console.log(`Creating new topic: ${topicName}`);
+    const insertStmt = env.DB.prepare('INSERT INTO topics (name, post_count) VALUES (?, 1)');
+    const result = await insertStmt.bind(topicName).run();
+    return result.meta.last_row_id;
+    
+  } catch (error) {
+    console.error('Error in getOrCreateTopic:', error);
+    // Return default topic ID (Features has id 5)
+    return 5;
+  }
 }
 
 function getTimeAgo(dateString) {
