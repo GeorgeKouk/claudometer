@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const Claudometer = () => {
@@ -22,7 +22,7 @@ const Claudometer = () => {
   const API_BASE = 'https://claudometer-api.georgekouk.workers.dev/api';
 
   // Apply category filtering to data
-  const applyFiltering = (rawPosts: any[], rawCategories: any[], rawKeywords: any[], selectedCat: string) => {
+  const applyFiltering = useCallback((rawPosts: any[], rawCategories: any[], rawKeywords: any[], selectedCat: string) => {
     if (selectedCat === 'all') {
       setRecentPosts(rawPosts);
       setCategoryData(rawCategories);
@@ -54,7 +54,7 @@ const Claudometer = () => {
     setCategoryData(filteredCategories);
     setKeywordData(filteredKeywords);
     setFilteredSentiment(avgSentiment);
-  };
+  }, [currentSentiment]);
 
   // Calculate next refresh time (3 minutes after each hour)
   const getNextRefreshTime = () => {
@@ -143,12 +143,12 @@ const Claudometer = () => {
 
     const timeoutId = scheduleNextFetch();
     return () => clearTimeout(timeoutId);
-  }, []);
+  }, [applyFiltering, selectedCategory]);
 
   // Apply filtering when selected category changes
   useEffect(() => {
     applyFiltering(rawRecentPosts, rawCategoryData, rawKeywordData, selectedCategory);
-  }, [selectedCategory, rawRecentPosts, rawCategoryData, rawKeywordData]);
+  }, [selectedCategory, rawRecentPosts, rawCategoryData, rawKeywordData, applyFiltering]);
 
   const getSentimentColor = (sentiment: number) => {
     if (sentiment >= 0.6) return '#22c55e'; // Green - positive
