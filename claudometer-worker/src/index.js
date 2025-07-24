@@ -88,7 +88,7 @@ async function getHourlyData(env) {
     
     // Transform to match expected format
     const hourlyData = results.results.map(row => ({
-      time: new Date(row.hour).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      time: row.hour, // Send raw ISO timestamp, let frontend handle formatting
       sentiment: row.weighted_sentiment || 0.5,
       posts: (row.post_count || 0) + (row.comment_count || 0)
     })).reverse();
@@ -161,45 +161,53 @@ async function getCategoryData(env) {
 
 async function getTopicData(env) {
   try {
-    // Get topics with post/comment counts and weighted sentiment
-    const stmt = env.DB.prepare(`
-      SELECT 
-        t.name,
-        t.color,
-        t.post_count,
-        COALESCE(posts_data.post_count, 0) as recent_post_count,
-        COALESCE(comments_data.comment_count, 0) as recent_comment_count,
-        COALESCE(
-          (posts_data.weighted_post_sentiment + comments_data.total_comment_sentiment) / 
-          (posts_data.post_count * 3 + comments_data.comment_count), 
-          0.5
-        ) as avg_sentiment
-      FROM topics t
-      LEFT JOIN (
-        SELECT topic_id, COUNT(*) as post_count, SUM(sentiment * 3) as weighted_post_sentiment
-        FROM posts 
-        WHERE processed_at > datetime("now", "-24 hours") AND topic_id IS NOT NULL
-        GROUP BY topic_id
-      ) posts_data ON t.id = posts_data.topic_id
-      LEFT JOIN (
-        SELECT topic_id, COUNT(*) as comment_count, SUM(sentiment) as total_comment_sentiment
-        FROM comments 
-        WHERE processed_at > datetime("now", "-24 hours") AND topic_id IS NOT NULL
-        GROUP BY topic_id
-      ) comments_data ON t.id = comments_data.topic_id
-      WHERE recent_post_count > 0 OR recent_comment_count > 0
-      ORDER BY (recent_post_count * 3 + recent_comment_count) DESC
-    `);
+    // Get topics from category field with post/comment counts and weighted sentiment
+    const postsStmt = env.DB.prepare('SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE processed_at > datetime("now", "-24 hours") AND category IS NOT NULL GROUP BY category');
+    const commentsStmt = env.DB.prepare('SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE processed_at > datetime("now", "-24 hours") AND category IS NOT NULL GROUP BY category');
     
-    const results = await stmt.all();
-    const total = results.results.reduce((sum, row) => sum + (row.recent_post_count * 3 + row.recent_comment_count), 0);
+    const [postsResults, commentsResults] = await Promise.all([
+      postsStmt.all(),
+      commentsStmt.all()
+    ]);
     
-    const topicData = results.results.map(row => ({
-      name: row.name,
-      value: total > 0 ? Math.round(((row.recent_post_count * 3 + row.recent_comment_count) / total) * 100) : 0,
-      sentiment: row.avg_sentiment || 0.5,
-      color: row.color || '#B8A082'
-    }));
+    // Combine and weight the data (posts = 3x weight, comments = 1x weight)
+    const categoryMap = {};
+    
+    postsResults.results.forEach(row => {
+      categoryMap[row.category] = {
+        name: row.category,
+        totalSentiment: (row.avg_sentiment || 0.5) * row.count * 3,
+        totalWeight: row.count * 3,
+        count: row.count * 3 // Weight posts 3x for display
+      };
+    });
+    
+    commentsResults.results.forEach(row => {
+      if (categoryMap[row.category]) {
+        categoryMap[row.category].totalSentiment += (row.avg_sentiment || 0.5) * row.count;
+        categoryMap[row.category].totalWeight += row.count;
+        categoryMap[row.category].count += row.count;
+      } else {
+        categoryMap[row.category] = {
+          name: row.category,
+          totalSentiment: (row.avg_sentiment || 0.5) * row.count,
+          totalWeight: row.count,
+          count: row.count
+        };
+      }
+    });
+    
+    const total = Object.values(categoryMap).reduce((sum, cat) => sum + cat.count, 0);
+    
+    // Get colors for each topic
+    const topicData = await Promise.all(
+      Object.values(categoryMap).map(async cat => ({
+        name: cat.name,
+        value: total > 0 ? Math.round((cat.count / total) * 100) : 0,
+        sentiment: cat.totalWeight > 0 ? cat.totalSentiment / cat.totalWeight : 0.5,
+        color: await getTopicColor(cat.name, env)
+      }))
+    );
     
     return new Response(JSON.stringify(topicData), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
@@ -299,10 +307,9 @@ async function getKeywordData(env) {
 async function getRecentPosts(env) {
   try {
     const stmt = env.DB.prepare(`
-      SELECT p.title, p.subreddit, p.sentiment, p.created_at, t.name as topic
-      FROM posts p
-      LEFT JOIN topics t ON p.topic_id = t.id
-      ORDER BY p.processed_at DESC LIMIT 10
+      SELECT title, subreddit, sentiment, created_at, category
+      FROM posts
+      ORDER BY processed_at DESC LIMIT 10
     `);
     const results = await stmt.all();
     
@@ -311,7 +318,7 @@ async function getRecentPosts(env) {
       subreddit: `r/${row.subreddit}`,
       title: row.title,
       sentiment: row.sentiment || 0.5,
-      category: row.topic || 'Features',
+      category: row.category || 'Features',
       time: getTimeAgo(row.created_at)
     }));
     
@@ -394,12 +401,15 @@ async function fetchRedditPosts(env) {
   
   const accessToken = await getRedditAccessToken(env);
   
+  // Calculate 1 hour ago timestamp for filtering
+  const oneHourAgo = Math.floor((Date.now() - (60 * 60 * 1000)) / 1000);
+  
   for (const subreddit of subreddits) {
     try {
-      console.log(`Fetching 10 posts from r/${subreddit}`);
+      console.log(`Fetching recent posts from r/${subreddit} (last hour)`);
       
-      // Fetch posts
-      const response = await fetch(`https://oauth.reddit.com/r/${subreddit}/hot?limit=10`, {
+      // Fetch top posts from last hour (20 posts as per spec)
+      const response = await fetch(`https://oauth.reddit.com/r/${subreddit}/top?t=hour&limit=20`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
@@ -430,11 +440,20 @@ async function fetchRedditPosts(env) {
           score: post.data.score || 0
         }));
 
-      console.log(`Found ${posts.length} posts in r/${subreddit}`);
-      allPosts.push(...posts);
-      
-      // Fetch comments for each post
+      // Check for duplicates in database to avoid reprocessing
+      const newPosts = [];
       for (const post of posts) {
+        const existingPost = await env.DB.prepare('SELECT id FROM posts WHERE id = ?').bind(post.id).first();
+        if (!existingPost) {
+          newPosts.push(post);
+        }
+      }
+
+      console.log(`Found ${posts.length} posts in r/${subreddit}, ${newPosts.length} are new`);
+      allPosts.push(...newPosts);
+      
+      // Fetch comments for each new post only
+      for (const post of newPosts) {
         try {
           console.log(`Fetching comments for post ${post.id}`);
           
@@ -456,7 +475,14 @@ async function fetchRedditPosts(env) {
             
             if (commentsListing?.data?.children) {
               const comments = commentsListing.data.children
-                .filter(comment => comment.data?.body && comment.data.body !== '[deleted]')
+                .filter(comment => {
+                  // Filter for valid comments from the last hour only
+                  if (!comment.data?.body || comment.data.body === '[deleted]') {
+                    return false;
+                  }
+                  // Only include comments from the last hour
+                  return comment.data.created_utc >= oneHourAgo;
+                })
                 .slice(0, 5) // Top 5 comments
                 .map(comment => ({
                   id: comment.data.id,
@@ -467,8 +493,17 @@ async function fetchRedditPosts(env) {
                   score: comment.data.score || 0
                 }));
               
-              console.log(`Found ${comments.length} comments for post ${post.id}`);
-              allComments.push(...comments);
+              // Check for duplicate comments
+              const newComments = [];
+              for (const comment of comments) {
+                const existingComment = await env.DB.prepare('SELECT id FROM comments WHERE id = ?').bind(comment.id).first();
+                if (!existingComment) {
+                  newComments.push(comment);
+                }
+              }
+              
+              console.log(`Found ${comments.length} comments for post ${post.id}, ${newComments.length} are new`);
+              allComments.push(...newComments);
             }
           }
         } catch (commentError) {
@@ -545,7 +580,7 @@ Available Topics: Authentication, Performance, Integration, Troubleshooting, Fea
 - Choose the BEST fitting topic from the list above
 - Only suggest a new single word topic if none of the above fit
 Sentiment: 0.0-1.0 where 0.5 is neutral
-Keywords: max 3 relevant keywords`
+Keywords: Extract max 3 specific words or phrases that ACTUALLY APPEAR in the text above. Do NOT create summarization keywords or abstract concepts. Only use real words/phrases from the original text.`
           }]
         })
       });
@@ -582,14 +617,10 @@ Keywords: max 3 relevant keywords`
         continue;
       }
 
-      // Get or create topic
-      const topicId = await getOrCreateTopic(analysis.topic || 'Features', env);
-
       analyzed.push({
         ...post,
         sentiment: Math.max(0, Math.min(1, analysis.sentiment || 0.5)),
-        topic_id: topicId,
-        topic: analysis.topic || 'Features',
+        category: analysis.topic || 'Features',
         keywords: JSON.stringify(analysis.keywords || ['general'])
       });
 
@@ -623,7 +654,7 @@ async function storeInDatabase(posts, comments, env) {
     for (const post of posts) {
       const stmt = env.DB.prepare(`
         INSERT OR REPLACE INTO posts 
-        (id, title, content, subreddit, created_at, score, sentiment, keywords, topic_id, processed_at)
+        (id, title, content, subreddit, created_at, score, sentiment, category, keywords, processed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
       
@@ -635,8 +666,8 @@ async function storeInDatabase(posts, comments, env) {
         post.created_at,
         post.score,
         post.sentiment,
-        post.keywords,
-        post.topic_id
+        post.category,
+        post.keywords
       ).run();
     }
 
@@ -644,7 +675,7 @@ async function storeInDatabase(posts, comments, env) {
     for (const comment of comments) {
       const stmt = env.DB.prepare(`
         INSERT OR REPLACE INTO comments 
-        (id, post_id, body, subreddit, score, sentiment, keywords, topic_id, created_at, processed_at)
+        (id, post_id, body, subreddit, score, sentiment, category, keywords, created_at, processed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
       
@@ -655,8 +686,8 @@ async function storeInDatabase(posts, comments, env) {
         comment.subreddit,
         comment.score,
         comment.sentiment,
+        comment.category,
         comment.keywords,
-        comment.topic_id,
         comment.created_at
       ).run();
     }
@@ -708,29 +739,59 @@ function getCorsHeaders() {
   };
 }
 
-async function getOrCreateTopic(topicName, env) {
+async function getTopicColor(topicName, env) {
   try {
-    // First, try to find existing topic
-    const selectStmt = env.DB.prepare('SELECT id FROM topics WHERE name = ?');
-    const existingTopic = await selectStmt.bind(topicName).first();
+    // First check if topic already exists in database
+    const existingTopic = await env.DB.prepare('SELECT color FROM topics WHERE name = ?').bind(topicName).first();
     
     if (existingTopic) {
-      // Update usage count
-      const updateStmt = env.DB.prepare('UPDATE topics SET post_count = post_count + 1 WHERE id = ?');
-      await updateStmt.bind(existingTopic.id).run();
-      return existingTopic.id;
+      return existingTopic.color;
     }
     
-    // Create new topic if it doesn't exist
-    console.log(`Creating new topic: ${topicName}`);
-    const insertStmt = env.DB.prepare('INSERT INTO topics (name, post_count) VALUES (?, 1)');
-    const result = await insertStmt.bind(topicName).run();
-    return result.meta.last_row_id;
+    // If topic doesn't exist, assign a new color and store it
+    const availableColors = [
+      '#FF6B6B', // Coral red
+      '#4ECDC4', // Teal
+      '#45B7D1', // Sky blue
+      '#96CEB4', // Mint green
+      '#FECA57', // Golden yellow
+      '#FF9FF3', // Pink
+      '#54A0FF', // Blue
+      '#5F27CD', // Purple
+      '#00D2D3', // Cyan
+      '#FF9F43', // Orange
+      '#EE5A24', // Red orange
+      '#0ABDE3', // Light blue
+      '#006BA6', // Dark blue
+      '#A55EEA', // Light purple
+      '#26DE81', // Green
+      '#FD79A8', // Light pink
+      '#FDCB6E', // Light yellow
+      '#6C5CE7', // Indigo
+      '#A29BFE', // Lavender
+      '#74B9FF'  // Light blue
+    ];
     
+    // Get count of existing topics to determine next color
+    const topicCount = await env.DB.prepare('SELECT COUNT(*) as count FROM topics').first();
+    const colorIndex = (topicCount?.count || 0) % availableColors.length;
+    const selectedColor = availableColors[colorIndex];
+    
+    // Store the new topic with its color (using INSERT OR REPLACE to handle race conditions)
+    const insertResult = await env.DB.prepare('INSERT OR REPLACE INTO topics (name, color) VALUES (?, ?)')
+      .bind(topicName, selectedColor)
+      .run();
+    
+    // If this was a replacement (topic already existed), get the existing color
+    if (insertResult.changes === 0) {
+      const existingColor = await env.DB.prepare('SELECT color FROM topics WHERE name = ?').bind(topicName).first();
+      return existingColor?.color || selectedColor;
+    }
+    
+    return selectedColor;
   } catch (error) {
-    console.error('Error in getOrCreateTopic:', error);
-    // Return default topic ID (Features has id 5)
-    return 5;
+    console.error('Error getting topic color:', error);
+    return '#B8A082'; // Fallback color
   }
 }
 

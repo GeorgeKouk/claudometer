@@ -213,21 +213,19 @@ const Claudometer = () => {
               onClick={() => setTimeframe(option.value)}
               className={`px-6 py-3 rounded-2xl shadow-lg font-medium transition-all duration-300 hover:shadow-xl hover:scale-105 focus:ring-4 focus:outline-none ${
                 timeframe === option.value 
-                  ? 'ring-2 ring-opacity-50 transform scale-105' 
+                  ? 'transform scale-105' 
                   : ''
               }`}
               style={{ 
                 backgroundColor: timeframe === option.value 
-                  ? 'rgba(255, 255, 255, 1)' 
+                  ? '#8b4513' 
                   : 'rgba(255, 255, 255, 0.85)',
-                color: '#8b4513',
+                color: timeframe === option.value ? '#ffffff' : '#8b4513',
                 background: timeframe === option.value
-                  ? 'linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(251, 246, 242, 1) 100%)'
+                  ? '#8b4513'
                   : 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(251, 246, 242, 0.85) 100%)',
                 backdropFilter: 'blur(10px)',
-                border: timeframe === option.value 
-                  ? '2px solid rgba(212, 163, 127, 0.5)'
-                  : '1px solid rgba(212, 163, 127, 0.2)'
+                border: '1px solid rgba(212, 163, 127, 0.2)'
               }}
             >
               {option.label}
@@ -293,8 +291,10 @@ const Claudometer = () => {
                     tickFormatter={(value) => {
                       const date = new Date(value);
                       return date.toLocaleTimeString('en-US', { 
-                        hour: 'numeric', 
-                        hour12: true 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false,
+                        timeZone: 'UTC'
                       });
                     }}
                   />
