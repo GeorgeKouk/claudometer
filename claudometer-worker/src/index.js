@@ -60,16 +60,20 @@ export default {
 
 async function getCurrentSentiment(env) {
   try {
-    const stmt = env.DB.prepare('SELECT avg_sentiment, post_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 1');
+    const stmt = env.DB.prepare('SELECT weighted_sentiment, post_count, comment_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 1');
     const result = await stmt.first();
     
-    const data = result || { weighted_sentiment: 0.5, post_count: 0 };
+    const data = result ? {
+      avg_sentiment: result.weighted_sentiment,
+      post_count: result.post_count,
+      comment_count: result.comment_count
+    } : { avg_sentiment: 0.5, post_count: 0, comment_count: 0 };
     
     return new Response(JSON.stringify(data), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ avg_sentiment: 0.5, post_count: 0 }), {
+    return new Response(JSON.stringify({ avg_sentiment: 0.5, post_count: 0, comment_count: 0 }), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
     });
   }
@@ -77,14 +81,14 @@ async function getCurrentSentiment(env) {
 
 async function getHourlyData(env) {
   try {
-    const stmt = env.DB.prepare('SELECT hour, avg_sentiment, post_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 24');
+    const stmt = env.DB.prepare('SELECT hour, weighted_sentiment, post_count, comment_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 24');
     const results = await stmt.all();
     
     // Transform to match expected format
     const hourlyData = results.results.map(row => ({
       time: new Date(row.hour).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-      sentiment: row.avg_sentiment || 0.5,
-      posts: row.post_count || 0
+      sentiment: row.weighted_sentiment || 0.5,
+      posts: (row.post_count || 0) + (row.comment_count || 0)
     })).reverse();
     
     return new Response(JSON.stringify(hourlyData), {
@@ -99,15 +103,48 @@ async function getHourlyData(env) {
 
 async function getCategoryData(env) {
   try {
-    const stmt = env.DB.prepare('SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE processed_at > datetime("now", "-24 hours") GROUP BY category');
-    const results = await stmt.all();
+    // Get posts and comments separately to apply weighted sentiment
+    const postsStmt = env.DB.prepare('SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE processed_at > datetime("now", "-24 hours") GROUP BY category');
+    const commentsStmt = env.DB.prepare('SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE processed_at > datetime("now", "-24 hours") GROUP BY category');
     
-    const total = results.results.reduce((sum, row) => sum + row.count, 0);
+    const [postsResults, commentsResults] = await Promise.all([
+      postsStmt.all(),
+      commentsStmt.all()
+    ]);
     
-    const categoryData = results.results.map(row => ({
-      name: row.category,
-      value: Math.round((row.count / total) * 100),
-      sentiment: row.avg_sentiment || 0.5
+    // Combine and weight the data (posts = 3x weight, comments = 1x weight)
+    const categoryMap = {};
+    
+    postsResults.results.forEach(row => {
+      categoryMap[row.category] = {
+        name: row.category,
+        totalSentiment: (row.avg_sentiment || 0.5) * row.count * 3,
+        totalWeight: row.count * 3,
+        count: row.count * 3 // Weight posts 3x for display
+      };
+    });
+    
+    commentsResults.results.forEach(row => {
+      if (categoryMap[row.category]) {
+        categoryMap[row.category].totalSentiment += (row.avg_sentiment || 0.5) * row.count;
+        categoryMap[row.category].totalWeight += row.count;
+        categoryMap[row.category].count += row.count;
+      } else {
+        categoryMap[row.category] = {
+          name: row.category,
+          totalSentiment: (row.avg_sentiment || 0.5) * row.count,
+          totalWeight: row.count,
+          count: row.count
+        };
+      }
+    });
+    
+    const total = Object.values(categoryMap).reduce((sum, cat) => sum + cat.count, 0);
+    
+    const categoryData = Object.values(categoryMap).map(cat => ({
+      name: cat.name,
+      value: total > 0 ? Math.round((cat.count / total) * 100) : 0,
+      sentiment: cat.totalWeight > 0 ? cat.totalSentiment / cat.totalWeight : 0.5
     }));
     
     return new Response(JSON.stringify(categoryData), {
@@ -122,19 +159,51 @@ async function getCategoryData(env) {
 
 async function getKeywordData(env) {
   try {
-    // This is a simplified version - in a real implementation you'd parse the keywords JSON
-    const stmt = env.DB.prepare('SELECT keywords, sentiment FROM posts WHERE processed_at > datetime("now", "-24 hours") AND keywords IS NOT NULL');
-    const results = await stmt.all();
+    // Get keywords from both posts and comments - strict count basis (no weighting for counts)
+    const postsStmt = env.DB.prepare('SELECT keywords, sentiment FROM posts WHERE processed_at > datetime("now", "-24 hours") AND keywords IS NOT NULL');
+    const commentsStmt = env.DB.prepare('SELECT keywords, sentiment FROM comments WHERE processed_at > datetime("now", "-24 hours") AND keywords IS NOT NULL');
+    
+    const [postsResults, commentsResults] = await Promise.all([
+      postsStmt.all(),
+      commentsStmt.all()
+    ]);
     
     const keywordCounts = {};
     const keywordSentiments = {};
     
-    results.results.forEach(row => {
+    // Process posts (1 count per occurrence, but weighted sentiment)
+    postsResults.results.forEach(row => {
       if (row.keywords) {
         try {
           const keywords = JSON.parse(row.keywords);
           keywords.forEach(keyword => {
-            keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+            keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1; // Strict count
+            keywordSentiments[keyword] = keywordSentiments[keyword] || [];
+            // Add sentiment 3 times for weighted sentiment calculation
+            keywordSentiments[keyword].push(row.sentiment, row.sentiment, row.sentiment);
+          });
+        } catch (e) {
+          // If keywords is not JSON, treat as comma-separated string
+          const keywords = row.keywords.split(',');
+          keywords.forEach(keyword => {
+            keyword = keyword.trim();
+            if (keyword) {
+              keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+              keywordSentiments[keyword] = keywordSentiments[keyword] || [];
+              keywordSentiments[keyword].push(row.sentiment, row.sentiment, row.sentiment);
+            }
+          });
+        }
+      }
+    });
+    
+    // Process comments (1 count per occurrence, 1x sentiment weight)
+    commentsResults.results.forEach(row => {
+      if (row.keywords) {
+        try {
+          const keywords = JSON.parse(row.keywords);
+          keywords.forEach(keyword => {
+            keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1; // Strict count
             keywordSentiments[keyword] = keywordSentiments[keyword] || [];
             keywordSentiments[keyword].push(row.sentiment);
           });
@@ -156,7 +225,7 @@ async function getKeywordData(env) {
     const keywordData = Object.entries(keywordCounts)
       .map(([keyword, count]) => ({
         keyword,
-        count,
+        count, // Actual occurrence count
         sentiment: keywordSentiments[keyword].reduce((sum, s) => sum + s, 0) / keywordSentiments[keyword].length
       }))
       .sort((a, b) => b.count - a.count)
@@ -213,11 +282,11 @@ async function collectRedditData(env) {
       return new Response('No posts fetched from Reddit');
     }
     
-    // Analyze posts with OpenAI (limit to 10 for cost control)
-    const analyzedPosts = await analyzeWithOpenAI(posts.slice(0, 10), env.OPENAI_API_KEY);
+    // Analyze ALL posts with OpenAI (truncate long content)
+    const analyzedPosts = await analyzeWithOpenAI(posts, env.OPENAI_API_KEY);
     
-    // Analyze comments with OpenAI (limit to 5 for cost control) 
-    const analyzedComments = await analyzeWithOpenAI(comments.slice(0, 5), env.OPENAI_API_KEY);
+    // Analyze ALL comments with OpenAI (truncate long content)
+    const analyzedComments = await analyzeWithOpenAI(comments, env.OPENAI_API_KEY);
     
     // Store both in database
     await storeInDatabase(analyzedPosts, analyzedComments, env);
@@ -333,6 +402,7 @@ async function fetchRedditPosts(env) {
                   id: comment.data.id,
                   post_id: post.id,
                   content: comment.data.body,
+                  subreddit: subreddit,
                   created_at: new Date(comment.data.created_utc * 1000).toISOString(),
                   score: comment.data.score || 0
                 }));
@@ -382,6 +452,9 @@ async function analyzeWithOpenAI(posts, apiKey) {
         console.log(`Skipping post ${post.id} - insufficient text content`);
         continue;
       }
+      
+      // Truncate long content to 500 characters for cost control
+      const truncatedText = text.length > 500 ? text.substring(0, 500) + '...' : text;
 
       const displayTitle = (post && post.title) ? post.title : 'Untitled';
       console.log(`Analyzing post: ${displayTitle.substring(0, 50)}...`);
@@ -393,13 +466,13 @@ async function analyzeWithOpenAI(posts, apiKey) {
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-4o-mini',
           max_tokens: 300,
           messages: [{
             role: 'user',
             content: `Analyze this Reddit post about Claude AI and respond with ONLY a JSON object:
 
-Text: "${text.substring(0, 500)}"
+Text: "${truncatedText}"
 
 JSON format:
 {
@@ -505,14 +578,15 @@ async function storeInDatabase(posts, comments, env) {
     for (const comment of comments) {
       const stmt = env.DB.prepare(`
         INSERT OR REPLACE INTO comments 
-        (id, post_id, body, score, sentiment, category, keywords, created_at, processed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        (id, post_id, body, subreddit, score, sentiment, category, keywords, created_at, processed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
       
       await stmt.bind(
         comment.id,
         comment.post_id,
         comment.content,
+        comment.subreddit,
         comment.score,
         comment.sentiment,
         comment.category,

@@ -19,50 +19,7 @@ OPENAI_API_KEY=your_openai_api_key
 ```
 
 ### Database Schema
-```sql
--- Posts table (existing)
-CREATE TABLE posts (
-  id TEXT PRIMARY KEY,
-  title TEXT,
-  content TEXT,
-  subreddit TEXT,
-  created_at TEXT,
-  score INTEGER DEFAULT 0,
-  sentiment REAL DEFAULT 0.5,
-  category TEXT DEFAULT 'General',
-  keywords TEXT,
-  processed_at TEXT
-);
-
--- Comments table (new)
-CREATE TABLE comments (
-  id TEXT PRIMARY KEY,
-  post_id TEXT NOT NULL,
-  content TEXT,
-  subreddit TEXT,
-  created_at TEXT,
-  score INTEGER DEFAULT 0,
-  sentiment REAL DEFAULT 0.5,
-  category TEXT DEFAULT 'General',
-  keywords TEXT,
-  processed_at TEXT
-);
-
--- Hourly aggregation (updated)
-CREATE TABLE sentiment_hourly (
-  hour TEXT PRIMARY KEY,
-  avg_sentiment REAL DEFAULT 0.5,
-  post_count INTEGER DEFAULT 0,
-  category_breakdown TEXT,
-  keyword_counts TEXT,
-  comment_count INTEGER DEFAULT 0,
-  weighted_sentiment REAL DEFAULT 0.5
-);
-
--- Indexes
-CREATE INDEX idx_comments_post_id ON comments(post_id);
-CREATE INDEX idx_comments_processed_at ON comments(processed_at);
-```
+See CLAUDE.md for current database schema and technical details.
 
 ### API Endpoints
 - `GET /` - Health check
@@ -77,7 +34,7 @@ CREATE INDEX idx_comments_processed_at ON comments(processed_at);
 1. **Reddit OAuth**: Authenticates with Reddit API
 2. **Fetch Data**: 20 posts + 5 top comments per subreddit (3 subreddits = ~180 items)
 3. **OpenAI Analysis**: Sentiment analysis on 10 posts + 15 comments (cost control)
-4. **Weighted Scoring**: Posts = 3x weight, Comments = 1x weight
+4. **Weighted Scoring**: Posts = 3x weight, Comments = 1x weight (for sentiment only, not keywords)
 5. **Storage**: Separate tables for posts/comments + hourly aggregation
 6. **Scheduled**: Runs hourly via cron trigger
 

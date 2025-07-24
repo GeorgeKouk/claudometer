@@ -1,25 +1,20 @@
 # Claudometer Project - Development Guide
 
-## Project Overview
-Claudometer is a real-time Reddit sentiment tracking dashboard that monitors Claude AI mentions across three subreddits (r/Anthropic, r/ClaudeAI, r/ClaudeCode). The system uses a Cloudflare-native architecture with automated data collection and AI-powered sentiment analysis.
+## Required Reading
+**IMPORTANT**: Always read both files for complete project understanding:
+- **project-summary.md** - Comprehensive project overview, architecture, and setup instructions
+- **CLAUDE.md** (this file) - Technical implementation details and development behavior
 
-## Architecture
+## Technical Implementation Details
 
-### Repository Structure
+### Current Repository Structure
 ```
 Claudometer/
 ├── claudometer-web/          # React frontend (Cloudflare Pages)
 ├── claudometer-worker/       # API backend (Cloudflare Workers)
-├── project_summary.md        # Original project specification
-└── CLAUDE.md                # This development guide
+├── project-summary.md        # Complete project overview and setup
+└── CLAUDE.md                # This technical development guide
 ```
-
-### Technology Stack
-- **Frontend**: React TypeScript with Tailwind CSS and Recharts
-- **Backend**: Cloudflare Workers (JavaScript)
-- **Database**: Cloudflare D1 (SQLite)
-- **APIs**: Reddit OAuth, OpenAI GPT-3.5-turbo
-- **Deployment**: Cloudflare Pages + Workers integration
 
 ## Frontend (claudometer-web/)
 
@@ -83,7 +78,7 @@ OPENAI_API_KEY=your_openai_api_key
 - **Database ID**: `a9446fa9-c70d-496f-b9e5-a636e72e8865`
 - **Binding**: `DB` (accessible via `env.DB` in worker)
 
-### Required Database Tables
+### Current Database Schema
 ```sql
 -- Posts table
 CREATE TABLE posts (
@@ -96,7 +91,7 @@ CREATE TABLE posts (
   sentiment REAL,
   category TEXT,
   keywords TEXT,
-  processed_at TEXT
+  processed_at TEXT DEFAULT (datetime('now'))
 );
 
 -- Comments table  
@@ -104,12 +99,14 @@ CREATE TABLE comments (
   id TEXT PRIMARY KEY,
   post_id TEXT,
   body TEXT,
+  subreddit TEXT,
   score INTEGER,
   sentiment REAL,
   category TEXT,
   keywords TEXT,
   created_at TEXT,
-  processed_at TEXT
+  processed_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (post_id) REFERENCES posts(id)
 );
 
 -- Hourly aggregation table
@@ -119,9 +116,17 @@ CREATE TABLE sentiment_hourly (
   post_count INTEGER,
   category_breakdown TEXT,
   keyword_counts TEXT,
-  comment_count INTEGER,
-  weighted_sentiment REAL
+  comment_count INTEGER DEFAULT 0,
+  weighted_sentiment REAL DEFAULT 0.5
 );
+
+-- Performance indexes
+CREATE INDEX idx_comments_post_id ON comments(post_id);
+CREATE INDEX idx_comments_processed_at ON comments(processed_at);
+CREATE INDEX idx_posts_processed_at ON posts(processed_at);
+CREATE INDEX idx_posts_subreddit ON posts(subreddit);
+CREATE INDEX idx_comments_subreddit ON comments(subreddit);
+CREATE INDEX idx_sentiment_hourly_hour ON sentiment_hourly(hour);
 ```
 
 ## Deployment Process
@@ -171,34 +176,19 @@ wrangler secret put REDDIT_CLIENT_SECRET
 wrangler secret put OPENAI_API_KEY
 ```
 
-## Data Flow
+## Critical Implementation Notes
 
-1. **Collection**: Cron job triggers hourly Reddit API calls
-2. **Analysis**: Posts/comments sent to OpenAI for sentiment analysis
-3. **Storage**: Results stored in D1 database with weighted sentiment calculation
-4. **Aggregation**: Hourly summaries calculated and stored
-5. **API**: Frontend fetches data via worker API endpoints
-6. **Visualization**: React dashboard displays real-time sentiment data
+### Key API Behavior
+- **Rate Limiting**: Always include 2-3 second delays between Reddit API calls
+- **Authentication**: Use Reddit OAuth, not unauthenticated requests
+- **OpenAI Integration**: Use `env.OPENAI_API_KEY` (not ANTHROPIC_API_KEY)
+- **Weighted Sentiment**: Posts = 3x weight, Comments = 1x weight in calculations
 
-## Future Enhancements
-
-### Frontend Improvements
-- [ ] Real-time data updates with WebSockets or polling
-- [ ] Interactive filtering by subreddit and date range
-- [ ] Export functionality for sentiment data
-- [ ] Mobile-responsive design improvements
-
-### Backend Improvements
-- [ ] Rate limiting and caching for API endpoints
-- [ ] Historical data retention policies
-- [ ] Enhanced error handling and logging
-- [ ] Additional sentiment analysis providers
-
-### Infrastructure
-- [ ] Custom domain setup
-- [ ] CDN optimization
-- [ ] Performance monitoring
-- [ ] Automated testing pipeline
+### Data Collection Logic
+- Fetch 20 posts + 5 top comments per subreddit (3 subreddits total)
+- Analyze 10 posts + 15 comments with OpenAI (cost control)
+- Store posts and comments in separate tables
+- Generate hourly aggregations with weighted sentiment
 
 ## Troubleshooting
 
@@ -233,3 +223,8 @@ wrangler secret put OPENAI_API_KEY
 - [Cloudflare Pages Documentation](https://developers.cloudflare.com/pages/)
 - [Reddit API Documentation](https://www.reddit.com/dev/api/)
 - [OpenAI API Documentation](https://platform.openai.com/docs/)
+
+## Development Environment Notes
+
+### Cloudflare Tooling
+- We installed wrangler and connected it to Cloudflare so you can access the D1 database and run the worker and app 
