@@ -589,7 +589,7 @@ Keywords: max 3 relevant keywords`
         ...post,
         sentiment: Math.max(0, Math.min(1, analysis.sentiment || 0.5)),
         topic_id: topicId,
-        topic: analysis.topic || 'Features'
+        topic: analysis.topic || 'Features',
         keywords: JSON.stringify(analysis.keywords || ['general'])
       });
 
