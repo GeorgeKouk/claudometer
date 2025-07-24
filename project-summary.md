@@ -65,7 +65,7 @@ npm run build
 ### Key Frontend Changes
 - Uses `weighted_sentiment` from API
 - Displays both posts and comments data
-- Real-time updates every 5 minutes
+- Real-time updates every 1 hour, a few minutes after cron job runs (2-3 minutes timeline estimate)
 - Manual refresh and data collection buttons
 
 ## Deployment Configuration

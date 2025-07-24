@@ -11,8 +11,17 @@ const Claudometer = () => {
   const [recentPosts, setRecentPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [nextRefresh, setNextRefresh] = useState<Date | null>(null);
 
   const API_BASE = 'https://claudometer-api.georgekouk.workers.dev/api';
+
+  // Calculate next refresh time (3 minutes after each hour)
+  const getNextRefreshTime = () => {
+    const now = new Date();
+    const nextHour = new Date(now);
+    nextHour.setHours(now.getHours() + 1, 3, 0, 0); // Next hour + 3 minutes
+    return nextHour;
+  };
 
   // Fetch data from API
   useEffect(() => {
@@ -52,6 +61,9 @@ const Claudometer = () => {
         setKeywordData(keywordsDataRaw || []);
         setRecentPosts(postsDataRaw || []);
 
+        // Update next refresh time
+        setNextRefresh(getNextRefreshTime());
+
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load data');
@@ -60,11 +72,26 @@ const Claudometer = () => {
       }
     };
 
+    // Initial fetch
     fetchData();
-    
-    // Refresh data every 5 minutes
-    const interval = setInterval(fetchData, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    setNextRefresh(getNextRefreshTime());
+
+    // Set up hourly refresh at 3 minutes past each hour
+    const scheduleNextFetch = () => {
+      const now = new Date();
+      const nextRefreshTime = getNextRefreshTime();
+      const msUntilRefresh = nextRefreshTime.getTime() - now.getTime();
+      
+      return setTimeout(() => {
+        fetchData();
+        // Schedule the next refresh
+        const interval = setInterval(fetchData, 60 * 60 * 1000); // Every hour
+        return () => clearInterval(interval);
+      }, msUntilRefresh);
+    };
+
+    const timeoutId = scheduleNextFetch();
+    return () => clearTimeout(timeoutId);
   }, []);
 
   const getSentimentColor = (sentiment: number) => {
@@ -160,6 +187,15 @@ const Claudometer = () => {
           <p className="text-lg font-medium max-w-2xl mx-auto" style={{ color: '#9f6841' }}>
             Real-time community sentiment tracking for Claude AI across Reddit communities
           </p>
+          {nextRefresh && (
+            <p className="text-sm font-medium mt-2" style={{ color: '#9f6841' }}>
+              Next update: {nextRefresh.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+              })}
+            </p>
+          )}
         </div>
 
         {/* Controls */}
