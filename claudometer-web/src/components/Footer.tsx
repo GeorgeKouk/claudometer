@@ -67,7 +67,7 @@ const Footer: React.FC = () => {
                 <strong>Last Updated:</strong> {buildDate}
               </p>
               <p>
-                Data refreshes hourly at 3 minutes past each hour.
+                Data refreshes hourly.
               </p>
             </div>
           </div>
