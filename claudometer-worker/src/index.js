@@ -717,10 +717,17 @@ async function analyzeWithOpenAI(posts, apiKey, env) {
 
 Text: "${truncatedText}"
 
+Examples:
+"Claude helped me debug my code perfectly" → sentiment: 0.9
+"Claude's latest update broke my workflow" → sentiment: 0.2  
+"Anyone know how to use Claude for data analysis?" → sentiment: 0.5
+
+Sentiment should reflect how positive/negative the author feels specifically about Claude AI or Anthropic products.
+
 JSON format:
 {
   "sentiment": 0.75,
-  "topic": "Performance",
+  "topic": "Performance", 
   "keywords": ["optimization", "speed"]
 }
 
