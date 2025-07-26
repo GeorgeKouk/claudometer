@@ -332,6 +332,7 @@ async function getRecentPosts(env) {
   }
 }
 
+
 async function collectRedditData(env) {
   try {
     console.log('Starting Reddit data collection...');
@@ -350,10 +351,10 @@ async function collectRedditData(env) {
     }
     
     // Analyze ALL posts with OpenAI (truncate long content)
-    const analyzedPosts = await analyzeWithOpenAI(posts, env.OPENAI_API_KEY);
+    const analyzedPosts = await analyzeWithOpenAI(posts, env.OPENAI_API_KEY, env);
     
     // Analyze ALL comments with OpenAI (truncate long content)
-    const analyzedComments = await analyzeWithOpenAI(comments, env.OPENAI_API_KEY);
+    const analyzedComments = await analyzeWithOpenAI(comments, env.OPENAI_API_KEY, env);
     
     // Store both in database
     await storeInDatabase(analyzedPosts, analyzedComments, env);
@@ -520,13 +521,24 @@ async function fetchRedditPosts(env) {
   return { posts: allPosts, comments: allComments };
 }
 
-async function analyzeWithOpenAI(posts, apiKey) {
+async function analyzeWithOpenAI(posts, apiKey, env) {
   console.log(`analyzeWithOpenAI called with ${posts.length} posts`);
   console.log('API Key status:', apiKey ? `Present (${apiKey.substring(0, 10)}...)` : 'MISSING');
   
   if (!apiKey) {
     console.error('CRITICAL: No OpenAI API key provided - throwing error');
     throw new Error('OpenAI API key not configured');
+  }
+
+  // Get available topics from database
+  let availableTopics = [];
+  try {
+    const topicsResult = await env.DB.prepare('SELECT name FROM topics ORDER BY name').all();
+    availableTopics = topicsResult.results.map(row => row.name);
+  } catch (error) {
+    console.error('Error fetching topics from database:', error);
+    // Fallback to hardcoded list
+    availableTopics = ['Authentication', 'Performance', 'Integration', 'Troubleshooting', 'Features', 'Documentation', 'Comparison', 'Tutorial', 'Feedback', 'Pricing'];
   }
 
   const analyzed = [];
@@ -576,7 +588,7 @@ JSON format:
   "keywords": ["optimization", "speed"]
 }
 
-Available Topics: Authentication, Performance, Integration, Troubleshooting, Features, Documentation, Comparison, Tutorial, Feedback, Pricing
+Available Topics: ${availableTopics.join(', ')}
 - Choose the BEST fitting topic from the list above
 - Only suggest a new single word topic if none of the above fit
 Sentiment: 0.0-1.0 where 0.5 is neutral
@@ -741,57 +753,59 @@ function getCorsHeaders() {
 
 async function getTopicColor(topicName, env) {
   try {
-    // First check if topic already exists in database
+    // Check if topic exists in topics table (hardcoded topics)
     const existingTopic = await env.DB.prepare('SELECT color FROM topics WHERE name = ?').bind(topicName).first();
     
     if (existingTopic) {
       return existingTopic.color;
     }
     
-    // If topic doesn't exist, assign a new color and store it
-    const availableColors = [
-      '#FF6B6B', // Coral red
-      '#4ECDC4', // Teal
-      '#45B7D1', // Sky blue
-      '#96CEB4', // Mint green
-      '#FECA57', // Golden yellow
-      '#FF9FF3', // Pink
-      '#54A0FF', // Blue
-      '#5F27CD', // Purple
-      '#00D2D3', // Cyan
-      '#FF9F43', // Orange
-      '#EE5A24', // Red orange
-      '#0ABDE3', // Light blue
-      '#006BA6', // Dark blue
-      '#A55EEA', // Light purple
-      '#26DE81', // Green
-      '#FD79A8', // Light pink
-      '#FDCB6E', // Light yellow
-      '#6C5CE7', // Indigo
-      '#A29BFE', // Lavender
-      '#74B9FF'  // Light blue
+    // Check if this is an old topic that exists in posts/comments but not in topics table
+    const oldTopicExists = await env.DB.prepare(`
+      SELECT 1 FROM (
+        SELECT category FROM posts WHERE category = ? 
+        UNION 
+        SELECT category FROM comments WHERE category = ?
+      ) LIMIT 1
+    `).bind(topicName, topicName).first();
+    
+    if (oldTopicExists) {
+      // Old topic - return black color
+      return '#000000';
+    }
+    
+    // New topic created by AI - assign next available color from palette
+    const colorPalette = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', 
+      '#FF9FF3', '#54A0FF', '#5F27CD', '#00D2D3', '#FF9F43',
+      '#EE5A24', '#0ABDE3', '#006BA6', '#A55EEA', '#26DE81',
+      '#FD79A8', '#FDCB6E', '#6C5CE7', '#A29BFE', '#74B9FF',
+      '#FD79A8', '#FDCB6E', '#55A3FF', '#26C281', '#FF7675',
+      '#6C5CE7', '#A29BFE', '#FDCB6E', '#00B894', '#E17055'
     ];
     
-    // Get count of existing topics to determine next color
-    const topicCount = await env.DB.prepare('SELECT COUNT(*) as count FROM topics').first();
-    const colorIndex = (topicCount?.count || 0) % availableColors.length;
-    const selectedColor = availableColors[colorIndex];
+    // Get all existing colors from topics table
+    const existingColors = await env.DB.prepare('SELECT color FROM topics').all();
+    const usedColors = new Set(existingColors.results.map(row => row.color));
     
-    // Store the new topic with its color (using INSERT OR REPLACE to handle race conditions)
-    const insertResult = await env.DB.prepare('INSERT OR REPLACE INTO topics (name, color) VALUES (?, ?)')
+    // Find first unused color from palette
+    let selectedColor = '#CCCCCC'; // fallback gray
+    for (const color of colorPalette) {
+      if (!usedColors.has(color)) {
+        selectedColor = color;
+        break;
+      }
+    }
+    
+    // Store the new topic with its assigned color
+    await env.DB.prepare('INSERT INTO topics (name, color) VALUES (?, ?)')
       .bind(topicName, selectedColor)
       .run();
-    
-    // If this was a replacement (topic already existed), get the existing color
-    if (insertResult.changes === 0) {
-      const existingColor = await env.DB.prepare('SELECT color FROM topics WHERE name = ?').bind(topicName).first();
-      return existingColor?.color || selectedColor;
-    }
     
     return selectedColor;
   } catch (error) {
     console.error('Error getting topic color:', error);
-    return '#B8A082'; // Fallback color
+    return '#CCCCCC'; // Fallback gray
   }
 }
 
