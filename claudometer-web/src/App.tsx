@@ -17,6 +17,7 @@ const Claudometer = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [nextRefresh, setNextRefresh] = useState<Date | null>(null);
+  const [showAllTopics, setShowAllTopics] = useState<boolean>(false);
 
   // Store raw data for filtering
 
@@ -449,22 +450,33 @@ const Claudometer = () => {
                 </ResponsiveContainer>
               </div>
               <div className="w-full sm:w-2/5 space-y-3 mt-4 sm:mt-0">
-                {[...topicData].sort((a, b) => b.value - a.value).map((item, index) => (
-                  <div key={item.name} className="flex items-center">
-                    <div 
-                      className="w-4 h-4 rounded-full mr-3 shadow-sm" 
-                      style={{ backgroundColor: item.color || '#B8A082' }}
-                    ></div>
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold" style={{ color: '#8b4513' }}>
-                        {item.name}
-                      </div>
-                      <div className="text-xs font-medium" style={{ color: '#9f6841' }}>
-                        {getSentimentLabel(item.sentiment)} • {item.referenceCount || 0} references
+                {[...topicData].sort((a, b) => b.value - a.value)
+                  .slice(0, showAllTopics ? topicData.length : 10)
+                  .map((item, index) => (
+                    <div key={item.name} className="flex items-center">
+                      <div 
+                        className="w-4 h-4 rounded-full mr-3 shadow-sm" 
+                        style={{ backgroundColor: item.color || '#B8A082' }}
+                      ></div>
+                      <div className="flex-1">
+                        <div className="text-sm font-semibold" style={{ color: '#8b4513' }}>
+                          {item.name}
+                        </div>
+                        <div className="text-xs font-medium" style={{ color: '#9f6841' }}>
+                          {getSentimentLabel(item.sentiment)} • {item.referenceCount || 0} references
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                {topicData.length > 10 && (
+                  <button
+                    onClick={() => setShowAllTopics(!showAllTopics)}
+                    className="text-xs font-medium mt-2 hover:underline transition-all duration-200"
+                    style={{ color: '#8b4513' }}
+                  >
+                    {showAllTopics ? `Show less` : `Show all ${topicData.length} topics`}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -474,41 +486,47 @@ const Claudometer = () => {
             backgroundColor: 'rgba(255, 255, 255, 0.85)',
             borderColor: 'rgba(212, 163, 127, 0.3)'
           }}>
-            <h3 className="text-xl font-semibold mb-6" style={{ color: '#8b4513' }}>
+            <h3 className="text-xl font-semibold mb-2" style={{ color: '#8b4513' }}>
               Trending Keywords
             </h3>
+            <p className="text-sm font-medium mb-6" style={{ color: '#9f6841' }}>
+              Color and tag show sentiment toward that keyword.
+            </p>
             <div className="space-y-4">
-              {keywordData.map((item, index) => (
-                <div key={item.keyword} className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center">
-                      <span className="font-semibold text-sm" style={{ color: '#8b4513' }}>
-                        {item.keyword}
-                      </span>
-                      <span className="ml-2 text-xs font-medium" style={{ color: '#9f6841' }}>
-                        ({item.count})
-                      </span>
-                    </div>
-                    <div className="w-full rounded-full h-2 mt-2" style={{ backgroundColor: '#f6ede5' }}>
-                      <div 
-                        className="h-2 rounded-full transition-all duration-500 shadow-sm"
-                        style={{ 
-                          width: `${(item.count / 31) * 100}%`,
-                          backgroundColor: getSentimentColor(item.sentiment)
-                        }}
-                      ></div>
+              {keywordData.map((item, index) => {
+                const maxCount = Math.max(...keywordData.map(k => k.count));
+                return (
+                  <div key={item.keyword} className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm" style={{ color: '#8b4513' }}>
+                            {item.keyword}
+                          </span>
+                          <span className="text-xs font-medium" style={{ color: '#9f6841' }}>
+                            ({item.count} mentions)
+                          </span>
+                        </div>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ 
+                          backgroundColor: getSentimentColor(item.sentiment) + '20',
+                          color: getSentimentColor(item.sentiment)
+                        }}>
+                          {getSentimentLabel(item.sentiment)}
+                        </span>
+                      </div>
+                      <div className="w-full rounded-full h-2" style={{ backgroundColor: '#f6ede5' }}>
+                        <div 
+                          className="h-2 rounded-full transition-all duration-500 shadow-sm"
+                          style={{ 
+                            width: `${(item.count / maxCount) * 100}%`,
+                            backgroundColor: getSentimentColor(item.sentiment)
+                          }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
-                  <div className="ml-4 text-right">
-                    <div 
-                      className="text-sm font-bold"
-                      style={{ color: getSentimentColor(item.sentiment) }}
-                    >
-                      {(item.sentiment * 100).toFixed(0)}%
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -571,7 +589,7 @@ const Claudometer = () => {
             Data updates hourly from r/Anthropic, r/ClaudeAI, and r/ClaudeCode
           </p>
           <p className="mt-1" style={{ color: '#9f6841' }}>
-            Sentiment analysis powered by OpenAI (lol)
+            Sentiment analysis powered by OpenAI (LOL)
           </p>
         </div>
       </div>
