@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import Reevaluation from './Reevaluation';
 
 const Claudometer = () => {
   const [timeframe, setTimeframe] = useState('24h');
@@ -21,7 +23,7 @@ const Claudometer = () => {
 
   // Store raw data for filtering
 
-  const API_BASE = 'https://claudometer-api.georgekouk.workers.dev/api';
+  const API_BASE = 'https://api.claudometer.app';
 
 
   // Calculate next refresh time (3 minutes after each hour)
@@ -598,7 +600,14 @@ const Claudometer = () => {
 };
 
 function App() {
-  return <Claudometer />;
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Claudometer />} />
+        <Route path="/reevaluation" element={<Reevaluation />} />
+      </Routes>
+    </Router>
+  );
 }
 
 export default App;
