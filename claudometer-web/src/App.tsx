@@ -344,7 +344,7 @@ const Claudometer = () => {
               <ResponsiveContainer width="60%" height={220}>
                 <PieChart>
                   <Pie
-                    data={topicData}
+                    data={[...topicData].sort((a, b) => b.value - a.value)}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -352,7 +352,7 @@ const Claudometer = () => {
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {topicData.map((entry, index) => (
+                    {[...topicData].sort((a, b) => b.value - a.value).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color || '#B8A082'} />
                     ))}
                   </Pie>
