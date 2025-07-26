@@ -27,17 +27,17 @@ export default {
 
     try {
       if (path === '/api/current-sentiment') {
-        return await getCurrentSentiment(env);
+        return await getCurrentSentiment(env, url);
       } else if (path === '/api/hourly-data') {
-        return await getHourlyData(env);
+        return await getTimeSeriesData(env, url);
       } else if (path === '/api/categories') {
-        return await getTopicData(env);
+        return await getTopicData(env, url);
       } else if (path === '/api/topics') {
-        return await getTopicData(env);
+        return await getTopicData(env, url);
       } else if (path === '/api/keywords') {
-        return await getKeywordData(env);
+        return await getKeywordData(env, url);
       } else if (path === '/api/recent-posts') {
-        return await getRecentPosts(env);
+        return await getRecentPosts(env, url);
       } else if (path === '/api/collect-data') {
         return await collectRedditData(env);
       } else if (path === '/') {
@@ -60,22 +60,76 @@ export default {
   }
 };
 
-async function getCurrentSentiment(env) {
+async function getCurrentSentiment(env, url) {
   try {
-    const stmt = env.DB.prepare('SELECT weighted_sentiment, post_count, comment_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 1');
-    const result = await stmt.first();
+    const period = url?.searchParams?.get('period') || '24h';
+    const validPeriods = ['24h', '7d', '30d', 'all'];
     
-    const data = result ? {
-      avg_sentiment: result.weighted_sentiment,
-      post_count: result.post_count,
-      comment_count: result.comment_count
-    } : { avg_sentiment: 0.5, post_count: 0, comment_count: 0 };
+    if (!validPeriods.includes(period)) {
+      return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    // Get latest sentiment (most recent data point)
+    const latestStmt = env.DB.prepare('SELECT weighted_sentiment, post_count, comment_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 1');
+    const latestResult = await latestStmt.first();
+    
+    // Get average sentiment for the selected period
+    const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
+    const avgStmt = env.DB.prepare(`
+      SELECT AVG(weighted_sentiment) as avg_sentiment, SUM(post_count) as total_posts, SUM(comment_count) as total_comments
+      FROM sentiment_hourly 
+      WHERE hour >= datetime('now', '-${daysBack} days')
+    `);
+    const avgResult = await avgStmt.first();
+    
+    const data = {
+      latest_sentiment: latestResult ? latestResult.weighted_sentiment : 0.5,
+      avg_sentiment: avgResult ? avgResult.avg_sentiment || 0.5 : 0.5,
+      latest_post_count: latestResult ? latestResult.post_count || 0 : 0,
+      latest_comment_count: latestResult ? latestResult.comment_count || 0 : 0,
+      avg_post_count: avgResult ? avgResult.total_posts || 0 : 0,
+      avg_comment_count: avgResult ? avgResult.total_comments || 0 : 0
+    };
     
     return new Response(JSON.stringify(data), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ avg_sentiment: 0.5, post_count: 0, comment_count: 0 }), {
+    return new Response(JSON.stringify({ 
+      latest_sentiment: 0.5, 
+      avg_sentiment: 0.5, 
+      latest_post_count: 0,
+      latest_comment_count: 0,
+      avg_post_count: 0, 
+      avg_comment_count: 0 
+    }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+async function getTimeSeriesData(env, url) {
+  try {
+    const period = url.searchParams.get('period') || '24h';
+    const validPeriods = ['24h', '7d', '30d', 'all'];
+    
+    if (!validPeriods.includes(period)) {
+      return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    if (period === '24h') {
+      return await getHourlyData(env);
+    } else {
+      return await getDailyAggregatedData(env, period);
+    }
+  } catch (error) {
+    return new Response(JSON.stringify([]), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
     });
   }
@@ -94,6 +148,41 @@ async function getHourlyData(env) {
     })).reverse();
     
     return new Response(JSON.stringify(hourlyData), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify([]), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+async function getDailyAggregatedData(env, period) {
+  try {
+    const daysBack = period === '7d' ? 7 : period === '30d' ? 30 : 365; // 'all' = 1 year max
+    
+    const stmt = env.DB.prepare(`
+      SELECT 
+        date(hour) as date,
+        AVG(weighted_sentiment) as sentiment,
+        SUM(post_count) as post_count,
+        SUM(comment_count) as comment_count,
+        SUM(post_count + comment_count) as total_posts
+      FROM sentiment_hourly 
+      WHERE hour >= datetime('now', '-${daysBack} days')
+      GROUP BY date(hour)
+      ORDER BY date DESC
+    `);
+    
+    const results = await stmt.all();
+    
+    const dailyData = results.results.map(row => ({
+      time: row.date + 'T12:00:00Z', // Use noon for daily data points
+      sentiment: row.sentiment || 0.5,
+      posts: row.total_posts || 0
+    })).reverse(); // Frontend expects chronological order
+    
+    return new Response(JSON.stringify(dailyData), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
     });
   } catch (error) {
@@ -159,11 +248,25 @@ async function getCategoryData(env) {
   }
 }
 
-async function getTopicData(env) {
+async function getTopicData(env, url) {
   try {
+    const period = url?.searchParams?.get('period') || '24h';
+    const validPeriods = ['24h', '7d', '30d', 'all'];
+    
+    if (!validPeriods.includes(period)) {
+      return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    // Calculate date filter based on period
+    const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
+    const dateFilter = period === 'all' ? '' : `AND processed_at > datetime("now", "-${daysBack} days")`;
+    
     // Get topics from category field with post/comment counts and weighted sentiment
-    const postsStmt = env.DB.prepare('SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE processed_at > datetime("now", "-24 hours") AND category IS NOT NULL GROUP BY category');
-    const commentsStmt = env.DB.prepare('SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE processed_at > datetime("now", "-24 hours") AND category IS NOT NULL GROUP BY category');
+    const postsStmt = env.DB.prepare(`SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE category IS NOT NULL ${dateFilter} GROUP BY category`);
+    const commentsStmt = env.DB.prepare(`SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE category IS NOT NULL ${dateFilter} GROUP BY category`);
     
     const [postsResults, commentsResults] = await Promise.all([
       postsStmt.all(),
@@ -224,11 +327,25 @@ async function getTopicData(env) {
   }
 }
 
-async function getKeywordData(env) {
+async function getKeywordData(env, url) {
   try {
+    const period = url?.searchParams?.get('period') || '24h';
+    const validPeriods = ['24h', '7d', '30d', 'all'];
+    
+    if (!validPeriods.includes(period)) {
+      return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    // Calculate date filter based on period
+    const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
+    const dateFilter = period === 'all' ? '' : `AND processed_at > datetime("now", "-${daysBack} days")`;
+    
     // Get keywords from both posts and comments - strict count basis (no weighting for counts)
-    const postsStmt = env.DB.prepare('SELECT keywords, sentiment FROM posts WHERE processed_at > datetime("now", "-24 hours") AND keywords IS NOT NULL');
-    const commentsStmt = env.DB.prepare('SELECT keywords, sentiment FROM comments WHERE processed_at > datetime("now", "-24 hours") AND keywords IS NOT NULL');
+    const postsStmt = env.DB.prepare(`SELECT keywords, sentiment FROM posts WHERE keywords IS NOT NULL ${dateFilter}`);
+    const commentsStmt = env.DB.prepare(`SELECT keywords, sentiment FROM comments WHERE keywords IS NOT NULL ${dateFilter}`);
     
     const [postsResults, commentsResults] = await Promise.all([
       postsStmt.all(),
@@ -308,11 +425,26 @@ async function getKeywordData(env) {
   }
 }
 
-async function getRecentPosts(env) {
+async function getRecentPosts(env, url) {
   try {
+    const period = url?.searchParams?.get('period') || '24h';
+    const validPeriods = ['24h', '7d', '30d', 'all'];
+    
+    if (!validPeriods.includes(period)) {
+      return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    // Calculate date filter based on period
+    const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
+    const dateFilter = period === 'all' ? '' : `WHERE processed_at > datetime("now", "-${daysBack} days")`;
+    
     const stmt = env.DB.prepare(`
       SELECT title, subreddit, sentiment, created_at, category
       FROM posts
+      ${dateFilter}
       ORDER BY processed_at DESC LIMIT 10
     `);
     const results = await stmt.all();

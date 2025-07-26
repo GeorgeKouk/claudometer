@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const Claudometer = () => {
   const [timeframe, setTimeframe] = useState('24h');
-  const [currentSentiment, setCurrentSentiment] = useState<number>(0.5);
+  const [sentimentMode, setSentimentMode] = useState<'latest' | 'average'>('average');
+  const [latestSentiment, setLatestSentiment] = useState<number>(0.5);
+  const [averageSentiment, setAverageSentiment] = useState<number>(0.5);
+  const [latestPostCount, setLatestPostCount] = useState<number>(0);
+  const [latestCommentCount, setLatestCommentCount] = useState<number>(0);
+  const [avgPostCount, setAvgPostCount] = useState<number>(0);
+  const [avgCommentCount, setAvgCommentCount] = useState<number>(0);
   const [hourlyData, setHourlyData] = useState<any[]>([]);
   const [topicData, setTopicData] = useState<any[]>([]);
   const [keywordData, setKeywordData] = useState<any[]>([]);
@@ -26,62 +32,68 @@ const Claudometer = () => {
   };
 
   // Fetch data from API
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch data with delays to avoid overloading API
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      
+      const currentRes = await fetch(`${API_BASE}/current-sentiment?period=${timeframe}`);
+      await delay(200);
+      
+      const hourlyRes = await fetch(`${API_BASE}/hourly-data?period=${timeframe}`);
+      await delay(200);
+      
+      const topicsRes = await fetch(`${API_BASE}/topics?period=${timeframe}`);
+      await delay(200);
+      
+      const keywordsRes = await fetch(`${API_BASE}/keywords?period=${timeframe}`);
+      await delay(200);
+      
+      const postsRes = await fetch(`${API_BASE}/recent-posts?period=${timeframe}`);
+
+      // Parse responses
+      const currentData = await currentRes.json();
+      const hourlyDataRaw = await hourlyRes.json();
+      const topicsDataRaw = await topicsRes.json();
+      const keywordsDataRaw = await keywordsRes.json();
+      const postsDataRaw = await postsRes.json();
+
+      // Update state
+      setLatestSentiment(currentData.latest_sentiment || 0.5);
+      setAverageSentiment(currentData.avg_sentiment || 0.5);
+      setLatestPostCount(currentData.latest_post_count || 0);
+      setLatestCommentCount(currentData.latest_comment_count || 0);
+      setAvgPostCount(currentData.avg_post_count || 0);
+      setAvgCommentCount(currentData.avg_comment_count || 0);
+      setHourlyData(hourlyDataRaw || []);
+      
+      // Store raw data for filtering (sort posts by most recent first)
+      const sortedPosts = (postsDataRaw || []).sort((a: any, b: any) => {
+        const dateA = new Date(a.created_at || a.time);
+        const dateB = new Date(b.created_at || b.time);
+        return dateB.getTime() - dateA.getTime();
+      });
+      // Set data directly
+      setRecentPosts(sortedPosts);
+      setTopicData(topicsDataRaw || []);
+      setKeywordData(keywordsDataRaw || []);
+
+      // Update next refresh time
+      setNextRefresh(getNextRefreshTime());
+
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, [timeframe]);
+
+  // Initial fetch and scheduled refresh
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Fetch data with delays to avoid overloading API
-        const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-        
-        const currentRes = await fetch(`${API_BASE}/current-sentiment`);
-        await delay(200);
-        
-        const hourlyRes = await fetch(`${API_BASE}/hourly-data`);
-        await delay(200);
-        
-        const topicsRes = await fetch(`${API_BASE}/topics`);
-        await delay(200);
-        
-        const keywordsRes = await fetch(`${API_BASE}/keywords`);
-        await delay(200);
-        
-        const postsRes = await fetch(`${API_BASE}/recent-posts`);
-
-        // Parse responses
-        const currentData = await currentRes.json();
-        const hourlyDataRaw = await hourlyRes.json();
-        const topicsDataRaw = await topicsRes.json();
-        const keywordsDataRaw = await keywordsRes.json();
-        const postsDataRaw = await postsRes.json();
-
-        // Update state
-        setCurrentSentiment(currentData.avg_sentiment || 0.5);
-        setHourlyData(hourlyDataRaw || []);
-        
-        // Store raw data for filtering (sort posts by most recent first)
-        const sortedPosts = (postsDataRaw || []).sort((a: any, b: any) => {
-          const dateA = new Date(a.created_at || a.time);
-          const dateB = new Date(b.created_at || b.time);
-          return dateB.getTime() - dateA.getTime();
-        });
-        // Set data directly
-        setRecentPosts(sortedPosts);
-        setTopicData(topicsDataRaw || []);
-        setKeywordData(keywordsDataRaw || []);
-
-        // Update next refresh time
-        setNextRefresh(getNextRefreshTime());
-
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     // Initial fetch
     fetchData();
     setNextRefresh(getNextRefreshTime());
@@ -102,7 +114,12 @@ const Claudometer = () => {
 
     const timeoutId = scheduleNextFetch();
     return () => clearTimeout(timeoutId);
-  }, []);
+  }, [fetchData]);
+
+  // Re-fetch data when timeframe changes
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const getSentimentColor = (sentiment: number) => {
     if (sentiment >= 0.8) return '#16a34a'; // Dark green - very positive
@@ -124,7 +141,7 @@ const Claudometer = () => {
     return 'Very Negative';
   };
 
-  const SentimentMeter = ({ value }: { value: number }) => {
+  const SentimentMeter = ({ value, mode, timeframe }: { value: number, mode: 'latest' | 'average', timeframe: string }) => {
     const angle = (value * 180) - 90; // Convert 0-1 to -90 to 90 degrees
     const color = getSentimentColor(value);
     
@@ -210,7 +227,8 @@ const Claudometer = () => {
           {[
             { value: '24h', label: 'Last 24 Hours', shortLabel: '24hrs' },
             { value: '7d', label: 'Last 7 Days', shortLabel: '7 days' },
-            { value: '30d', label: 'Last 30 Days', shortLabel: '30 days' }
+            { value: '30d', label: 'Last 30 Days', shortLabel: '30 days' },
+            { value: 'all', label: 'All Time', shortLabel: 'All' }
           ].map((option) => (
             <button
               key={option.value}
@@ -269,30 +287,66 @@ const Claudometer = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8 mb-5 sm:mb-10">
           {/* Sentiment Meter */}
           <div className="lg:col-span-1">
-            <div className="rounded-2xl shadow-lg border px-4 sm:px-8 py-3 sm:py-5 h-80" style={{ 
+            <div className="rounded-2xl shadow-lg border px-4 sm:px-8 py-3 sm:py-5 h-96" style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.85)',
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
-              <h3 className="text-xl font-semibold text-left mb-6" style={{ color: '#8b4513' }}>
-                Current Community Sentiment
+              <h3 className="text-xl font-semibold text-center mb-3" style={{ color: '#8b4513' }}>
+                Community Sentiment
               </h3>
-              <SentimentMeter value={currentSentiment} />
-              <div className="text-center text-sm font-medium mt-2" style={{ color: '#9f6841' }}>
-                Based on {hourlyData.reduce((sum, d) => sum + d.posts, 0)} posts/comments
+
+              <SentimentMeter 
+                value={sentimentMode === 'latest' ? latestSentiment : averageSentiment} 
+                mode={sentimentMode}
+                timeframe={timeframe}
+              />
+              
+              <div className="text-center text-xs font-medium mb-3" style={{ color: '#9f6841' }}>
+                Based on {sentimentMode === 'latest' 
+                  ? (latestPostCount + latestCommentCount) 
+                  : (avgPostCount + avgCommentCount)
+                } posts/comments
+              </div>
+              
+              {/* Sentiment Mode Toggle - Below Meter */}
+              <div className="flex justify-center gap-2">
+                {[
+                  { value: 'average', label: 'Average' },
+                  { value: 'latest', label: 'Latest' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setSentimentMode(option.value as 'latest' | 'average')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      sentimentMode === option.value 
+                        ? 'shadow-md transform scale-105' 
+                        : 'hover:scale-105'
+                    }`}
+                    style={{ 
+                      backgroundColor: sentimentMode === option.value 
+                        ? '#8b4513' 
+                        : 'rgba(255, 255, 255, 0.7)',
+                      color: sentimentMode === option.value ? '#ffffff' : '#8b4513',
+                      border: '1px solid rgba(212, 163, 127, 0.3)'
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
           {/* Trend Chart */}
           <div className="lg:col-span-2">
-            <div className="rounded-2xl shadow-lg border px-4 sm:px-8 py-3 sm:py-5 h-80" style={{ 
+            <div className="rounded-2xl shadow-lg border px-4 sm:px-8 py-3 sm:py-5 h-96" style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.85)',
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
               <h3 className="text-xl font-semibold mb-6" style={{ color: '#8b4513' }}>
-                Sentiment Trend (24h)
+                Sentiment Trend ({timeframe === '24h' ? '24h' : timeframe === '7d' ? '7 days' : timeframe === '30d' ? '30 days' : 'All Time'})
               </h3>
-              <ResponsiveContainer width="100%" height={230}>
+              <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={hourlyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ead1bf" />
                   <XAxis 
@@ -301,12 +355,22 @@ const Claudometer = () => {
                     axisLine={{ stroke: '#ead1bf' }}
                     tickFormatter={(value) => {
                       const date = new Date(value);
-                      return date.toLocaleTimeString('en-US', { 
-                        hour: '2-digit', 
-                        minute: '2-digit',
-                        hour12: false,
-                        timeZone: 'UTC'
-                      });
+                      if (timeframe === '24h') {
+                        // Show hours for 24h view
+                        return date.toLocaleTimeString('en-US', { 
+                          hour: '2-digit', 
+                          minute: '2-digit',
+                          hour12: false,
+                          timeZone: 'UTC'
+                        });
+                      } else {
+                        // Show dates for longer periods
+                        return date.toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric',
+                          timeZone: 'UTC'
+                        });
+                      }
                     }}
                   />
                   <YAxis 
