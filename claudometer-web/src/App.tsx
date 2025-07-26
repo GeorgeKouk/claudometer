@@ -105,9 +105,13 @@ const Claudometer = () => {
   }, []);
 
   const getSentimentColor = (sentiment: number) => {
-    if (sentiment >= 0.6) return '#22c55e'; // Green - positive
-    if (sentiment >= 0.4) return '#94a3b8'; // Gray - neutral  
-    return '#ef4444'; // Red - negative
+    if (sentiment >= 0.8) return '#16a34a'; // Dark green - very positive
+    if (sentiment >= 0.7) return '#22c55e'; // Green - positive
+    if (sentiment >= 0.6) return '#65a30d'; // Yellow-green - slightly positive
+    if (sentiment >= 0.5) return '#94a3b8'; // Gray - neutral
+    if (sentiment >= 0.4) return '#f59e0b'; // Orange - slightly negative
+    if (sentiment >= 0.3) return '#f97316'; // Dark orange - negative
+    return '#ef4444'; // Red - very negative
   };
 
   const getSentimentLabel = (sentiment: number) => {
