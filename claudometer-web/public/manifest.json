@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Claudometer",
+  "name": "Get community sentiment analysis on Claude AI",
+  "description": "Claudometer – measure Reddit's sentiment on Claude AI",
   "icons": [
     {
       "src": "favicon.ico",
@@ -19,6 +20,7 @@
     }
   ],
   "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "theme_color": "#000000",
   "background_color": "#ffffff"
