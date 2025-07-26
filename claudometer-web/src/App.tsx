@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import Reevaluation from './Reevaluation';
+import Footer from './components/Footer';
+import Contact from './pages/Contact';
+import Methodology from './pages/Methodology';
 
 const Claudometer = () => {
   const [timeframe, setTimeframe] = useState('24h');
@@ -585,16 +588,9 @@ const Claudometer = () => {
         </div>
         )}
 
-        {/* Footer */}
-        <div className="text-center mt-12 text-sm">
-          <p className="font-medium" style={{ color: '#9f6841' }}>
-            Data updates hourly from r/Anthropic, r/ClaudeAI, and r/ClaudeCode
-          </p>
-          <p className="mt-1" style={{ color: '#9f6841' }}>
-            Sentiment analysis powered by OpenAI (LOL)
-          </p>
-        </div>
       </div>
+      
+      <Footer />
     </div>
   );
 };
@@ -605,6 +601,8 @@ function App() {
       <Routes>
         <Route path="/" element={<Claudometer />} />
         <Route path="/reevaluation" element={<Reevaluation />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/methodology" element={<Methodology />} />
       </Routes>
     </Router>
   );
