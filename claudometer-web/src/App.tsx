@@ -368,7 +368,7 @@ const Claudometer = () => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="w-2/5 space-y-3">
-                {topicData.map((item, index) => (
+                {[...topicData].sort((a, b) => b.value - a.value).map((item, index) => (
                   <div key={item.name} className="flex items-center">
                     <div 
                       className="w-4 h-4 rounded-full mr-3 shadow-sm" 
@@ -379,7 +379,10 @@ const Claudometer = () => {
                         {item.name}
                       </div>
                       <div className="text-xs font-medium" style={{ color: '#9f6841' }}>
-                        {(item.sentiment * 100).toFixed(0)}% sentiment
+                        {getSentimentLabel(item.sentiment)}
+                      </div>
+                      <div className="text-xs font-medium" style={{ color: '#9f6841' }}>
+                        {item.referenceCount || 0} references
                       </div>
                     </div>
                   </div>

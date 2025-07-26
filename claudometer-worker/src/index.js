@@ -178,7 +178,8 @@ async function getTopicData(env) {
         name: row.category,
         totalSentiment: (row.avg_sentiment || 0.5) * row.count * 3,
         totalWeight: row.count * 3,
-        count: row.count * 3 // Weight posts 3x for display
+        count: row.count * 3, // Weight posts 3x for display
+        actualCount: row.count // Unweighted count for reference count
       };
     });
     
@@ -187,12 +188,14 @@ async function getTopicData(env) {
         categoryMap[row.category].totalSentiment += (row.avg_sentiment || 0.5) * row.count;
         categoryMap[row.category].totalWeight += row.count;
         categoryMap[row.category].count += row.count;
+        categoryMap[row.category].actualCount += row.count; // Add unweighted count
       } else {
         categoryMap[row.category] = {
           name: row.category,
           totalSentiment: (row.avg_sentiment || 0.5) * row.count,
           totalWeight: row.count,
-          count: row.count
+          count: row.count,
+          actualCount: row.count // Unweighted count for reference count
         };
       }
     });
@@ -205,7 +208,8 @@ async function getTopicData(env) {
         name: cat.name,
         value: total > 0 ? Math.round((cat.count / total) * 100) : 0,
         sentiment: cat.totalWeight > 0 ? cat.totalSentiment / cat.totalWeight : 0.5,
-        color: await getTopicColor(cat.name, env)
+        color: await getTopicColor(cat.name, env),
+        referenceCount: cat.actualCount
       }))
     );
     
