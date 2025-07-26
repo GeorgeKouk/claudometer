@@ -289,11 +289,11 @@ const Claudometer = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8 mb-5 sm:mb-10">
           {/* Sentiment Meter */}
           <div className="lg:col-span-1">
-            <div className="rounded-2xl shadow-lg border px-4 sm:px-8 py-3 sm:py-5 h-96" style={{ 
+            <div className="rounded-2xl shadow-lg border p-4 sm:p-8 h-auto" style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.85)',
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
-              <h3 className="text-xl font-semibold text-center mb-3" style={{ color: '#8b4513' }}>
+              <h3 className="text-xl font-semibold text-left mb-3" style={{ color: '#8b4513' }}>
                 Community Sentiment
               </h3>
 
@@ -341,7 +341,7 @@ const Claudometer = () => {
 
           {/* Trend Chart */}
           <div className="lg:col-span-2">
-            <div className="rounded-2xl shadow-lg border px-4 sm:px-8 py-3 sm:py-5 h-96" style={{ 
+            <div className="rounded-2xl shadow-lg border p-4 sm:p-8 h-auto" style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.85)',
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
@@ -410,7 +410,7 @@ const Claudometer = () => {
         {!loading && !error && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-5 sm:mb-10">
           {/* Category Breakdown */}
-          <div className="rounded-2xl shadow-lg border p-4 sm:p-8" style={{ 
+          <div className="rounded-2xl shadow-lg border p-4 sm:p-8 h-auto" style={{ 
             backgroundColor: 'rgba(255, 255, 255, 0.85)',
             borderColor: 'rgba(212, 163, 127, 0.3)'
           }}>
@@ -470,7 +470,7 @@ const Claudometer = () => {
           </div>
 
           {/* Top Keywords */}
-          <div className="rounded-2xl shadow-lg border p-4 sm:p-8" style={{ 
+          <div className="rounded-2xl shadow-lg border p-4 sm:p-8 h-auto" style={{ 
             backgroundColor: 'rgba(255, 255, 255, 0.85)',
             borderColor: 'rgba(212, 163, 127, 0.3)'
           }}>
@@ -516,7 +516,7 @@ const Claudometer = () => {
 
         {/* Recent Posts */}
         {!loading && !error && (
-        <div className="rounded-2xl shadow-lg border p-4 sm:p-8" style={{ 
+        <div className="rounded-2xl shadow-lg border p-4 sm:p-8 h-auto" style={{ 
           backgroundColor: 'rgba(255, 255, 255, 0.85)',
           borderColor: 'rgba(212, 163, 127, 0.3)'
         }}>
