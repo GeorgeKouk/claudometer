@@ -26,20 +26,26 @@ export default {
     }
 
     try {
-      if (path === '/api/current-sentiment') {
+      if (path === '/current-sentiment') {
         return await getCurrentSentiment(env, url);
-      } else if (path === '/api/hourly-data') {
+      } else if (path === '/hourly-data') {
         return await getTimeSeriesData(env, url);
-      } else if (path === '/api/categories') {
+      } else if (path === '/categories') {
         return await getTopicData(env, url);
-      } else if (path === '/api/topics') {
+      } else if (path === '/topics') {
         return await getTopicData(env, url);
-      } else if (path === '/api/keywords') {
+      } else if (path === '/keywords') {
         return await getKeywordData(env, url);
-      } else if (path === '/api/recent-posts') {
+      } else if (path === '/recent-posts') {
         return await getRecentPosts(env, url);
-      } else if (path === '/api/collect-data') {
+      } else if (path === '/collect-data') {
         return await collectRedditData(env);
+      } else if (path === '/dev/posts' && env.DEV_MODE_ENABLED === 'true') {
+        return await getDevPosts(env, url);
+      } else if (path === '/dev/reevaluate' && env.DEV_MODE_ENABLED === 'true') {
+        return await reevaluateSentiments(request, env);
+      } else if (path === '/dev/rollback' && env.DEV_MODE_ENABLED === 'true') {
+        return await rollbackSentiments(request, env);
       } else if (path === '/') {
         return new Response('Claudometer API is running!', { headers: corsHeaders });
       }
@@ -964,4 +970,214 @@ function getTimeAgo(dateString) {
   if (diffHours > 0) return `${diffHours}h ago`;
   if (diffMins > 0) return `${diffMins}m ago`;
   return 'Just now';
+}
+
+// DEV MODE ENDPOINTS - Only accessible when DEV_MODE_ENABLED=true
+
+async function getDevPosts(env, url) {
+  try {
+    const startDate = url.searchParams.get('start_date');
+    const endDate = url.searchParams.get('end_date');
+    
+    if (!startDate || !endDate) {
+      return new Response(JSON.stringify({ error: 'start_date and end_date required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+
+    // Get posts and comments in date range
+    const postsStmt = env.DB.prepare(`
+      SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, 'post' as type
+      FROM posts 
+      WHERE processed_at >= ? AND processed_at <= ?
+      ORDER BY processed_at DESC
+    `);
+    
+    const commentsStmt = env.DB.prepare(`
+      SELECT id, post_id, body as content, subreddit, sentiment, category, keywords, processed_at, 'comment' as type
+      FROM comments 
+      WHERE processed_at >= ? AND processed_at <= ?
+      ORDER BY processed_at DESC
+    `);
+
+    const [postsResults, commentsResults] = await Promise.all([
+      postsStmt.bind(startDate, endDate).all(),
+      commentsStmt.bind(startDate, endDate).all()
+    ]);
+
+    // Combine and format data
+    const allItems = [
+      ...postsResults.results.map(post => ({
+        id: post.id,
+        type: 'post',
+        title: post.title,
+        content: post.content,
+        truncatedContent: getTruncatedText(post.title, post.content),
+        subreddit: post.subreddit,
+        sentiment: post.sentiment,
+        category: post.category,
+        keywords: post.keywords,
+        processed_at: post.processed_at
+      })),
+      ...commentsResults.results.map(comment => ({
+        id: comment.id,
+        type: 'comment',
+        post_id: comment.post_id,
+        title: `Comment on ${comment.post_id}`,
+        content: comment.content,
+        truncatedContent: getTruncatedText('', comment.content),
+        subreddit: comment.subreddit,
+        sentiment: comment.sentiment,
+        category: comment.category,
+        keywords: comment.keywords,
+        processed_at: comment.processed_at
+      }))
+    ].sort((a, b) => new Date(b.processed_at) - new Date(a.processed_at));
+
+    return new Response(JSON.stringify(allItems), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    console.error('Error in getDevPosts:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+async function reevaluateSentiments(request, env) {
+  try {
+    const { items } = await request.json();
+    
+    if (!items || !Array.isArray(items)) {
+      return new Response(JSON.stringify({ error: 'items array required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+
+    const results = [];
+    
+    // Process in batches of 50
+    for (let i = 0; i < items.length; i += 50) {
+      const batch = items.slice(i, i + 50);
+      
+      for (const item of batch) {
+        try {
+          // Re-analyze with OpenAI using current prompt
+          const analyzed = await analyzeWithOpenAI([{
+            id: item.id,
+            title: item.title,
+            content: item.content
+          }], env.OPENAI_API_KEY, env);
+
+          if (analyzed.length > 0) {
+            const newSentiment = analyzed[0].sentiment;
+            const newCategory = analyzed[0].category;
+            const newKeywords = analyzed[0].keywords;
+
+            // Update database
+            if (item.type === 'post') {
+              await env.DB.prepare(`
+                UPDATE posts 
+                SET sentiment = ?, category = ?, keywords = ?
+                WHERE id = ?
+              `).bind(newSentiment, newCategory, newKeywords, item.id).run();
+            } else {
+              await env.DB.prepare(`
+                UPDATE comments 
+                SET sentiment = ?, category = ?, keywords = ?
+                WHERE id = ?
+              `).bind(newSentiment, newCategory, newKeywords, item.id).run();
+            }
+
+            results.push({
+              id: item.id,
+              type: item.type,
+              title: item.title,
+              oldSentiment: item.sentiment,
+              newSentiment: newSentiment,
+              oldCategory: item.category,
+              newCategory: newCategory,
+              truncatedContent: item.truncatedContent
+            });
+          }
+        } catch (error) {
+          console.error(`Error processing item ${item.id}:`, error);
+          results.push({
+            id: item.id,
+            type: item.type,
+            title: item.title,
+            error: error.message,
+            truncatedContent: item.truncatedContent
+          });
+        }
+      }
+    }
+
+    return new Response(JSON.stringify({ results }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    console.error('Error in reevaluateSentiments:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+async function rollbackSentiments(request, env) {
+  try {
+    const { items } = await request.json();
+    
+    if (!items || !Array.isArray(items)) {
+      return new Response(JSON.stringify({ error: 'items array required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+
+    const results = [];
+    
+    for (const item of items) {
+      try {
+        if (item.type === 'post') {
+          await env.DB.prepare(`
+            UPDATE posts 
+            SET sentiment = ?, category = ?, keywords = ?
+            WHERE id = ?
+          `).bind(item.oldSentiment, item.oldCategory, item.oldKeywords, item.id).run();
+        } else {
+          await env.DB.prepare(`
+            UPDATE comments 
+            SET sentiment = ?, category = ?, keywords = ?
+            WHERE id = ?
+          `).bind(item.oldSentiment, item.oldCategory, item.oldKeywords, item.id).run();
+        }
+        
+        results.push({ id: item.id, success: true });
+      } catch (error) {
+        console.error(`Error rolling back item ${item.id}:`, error);
+        results.push({ id: item.id, success: false, error: error.message });
+      }
+    }
+
+    return new Response(JSON.stringify({ results }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    console.error('Error in rollbackSentiments:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+function getTruncatedText(title, content) {
+  const text = `${title || ''} ${content || ''}`.trim();
+  return text.length > 500 ? text.substring(0, 500) + '...' : text;
 }
