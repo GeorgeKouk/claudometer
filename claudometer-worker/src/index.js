@@ -78,6 +78,15 @@ async function getCurrentSentiment(env, url) {
       });
     }
     
+    // Check cache first
+    const cacheKey = getCacheKey('current-sentiment', { period });
+    const cached = await getFromCache(cacheKey, env);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      });
+    }
+    
     // Get latest sentiment (most recent data point)
     const latestStmt = env.DB.prepare('SELECT weighted_sentiment, post_count, comment_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 1');
     const latestResult = await latestStmt.first();
@@ -100,8 +109,11 @@ async function getCurrentSentiment(env, url) {
       avg_comment_count: avgResult ? avgResult.total_comments || 0 : 0
     };
     
+    // Cache the result
+    await setCache(cacheKey, data, env);
+    
     return new Response(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   } catch (error) {
     return new Response(JSON.stringify({ 
@@ -112,7 +124,7 @@ async function getCurrentSentiment(env, url) {
       avg_post_count: 0, 
       avg_comment_count: 0 
     }), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   }
 }
@@ -129,19 +141,36 @@ async function getTimeSeriesData(env, url) {
       });
     }
     
-    if (period === '24h') {
-      return await getHourlyData(env);
-    } else {
-      return await getDailyAggregatedData(env, period);
+    // Check cache first
+    const cacheKey = getCacheKey('hourly-data', { period });
+    const cached = await getFromCache(cacheKey, env);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      });
     }
+    
+    let data;
+    if (period === '24h') {
+      data = await getHourlyDataUncached(env);
+    } else {
+      data = await getDailyAggregatedDataUncached(env, period);
+    }
+    
+    // Cache the result
+    await setCache(cacheKey, data, env);
+    
+    return new Response(JSON.stringify(data), {
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+    });
   } catch (error) {
     return new Response(JSON.stringify([]), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   }
 }
 
-async function getHourlyData(env) {
+async function getHourlyDataUncached(env) {
   try {
     const stmt = env.DB.prepare('SELECT hour, weighted_sentiment, post_count, comment_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 24');
     const results = await stmt.all();
@@ -153,17 +182,13 @@ async function getHourlyData(env) {
       posts: (row.post_count || 0) + (row.comment_count || 0)
     })).reverse();
     
-    return new Response(JSON.stringify(hourlyData), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
-    });
+    return hourlyData;
   } catch (error) {
-    return new Response(JSON.stringify([]), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
-    });
+    return [];
   }
 }
 
-async function getDailyAggregatedData(env, period) {
+async function getDailyAggregatedDataUncached(env, period) {
   try {
     const daysBack = period === '7d' ? 7 : period === '30d' ? 30 : 365; // 'all' = 1 year max
     
@@ -188,13 +213,9 @@ async function getDailyAggregatedData(env, period) {
       posts: row.total_posts || 0
     })).reverse(); // Frontend expects chronological order
     
-    return new Response(JSON.stringify(dailyData), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
-    });
+    return dailyData;
   } catch (error) {
-    return new Response(JSON.stringify([]), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
-    });
+    return [];
   }
 }
 
@@ -266,6 +287,15 @@ async function getTopicData(env, url) {
       });
     }
     
+    // Check cache first
+    const cacheKey = getCacheKey('topics', { period });
+    const cached = await getFromCache(cacheKey, env);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      });
+    }
+    
     // Calculate date filter based on period
     const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
     const dateFilter = period === 'all' ? '' : `AND processed_at > datetime("now", "-${daysBack} days")`;
@@ -322,13 +352,16 @@ async function getTopicData(env, url) {
       }))
     );
     
+    // Cache the result
+    await setCache(cacheKey, topicData, env);
+    
     return new Response(JSON.stringify(topicData), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   } catch (error) {
     console.error('Error in getTopicData:', error);
     return new Response(JSON.stringify([]), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   }
 }
@@ -342,6 +375,15 @@ async function getKeywordData(env, url) {
       return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    // Check cache first
+    const cacheKey = getCacheKey('keywords', { period });
+    const cached = await getFromCache(cacheKey, env);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
       });
     }
     
@@ -421,12 +463,15 @@ async function getKeywordData(env, url) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
     
+    // Cache the result
+    await setCache(cacheKey, keywordData, env);
+    
     return new Response(JSON.stringify(keywordData), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   } catch (error) {
     return new Response(JSON.stringify([]), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   }
 }
@@ -440,6 +485,15 @@ async function getRecentPosts(env, url) {
       return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    // Check cache first
+    const cacheKey = getCacheKey('recent-posts', { period });
+    const cached = await getFromCache(cacheKey, env);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
       });
     }
     
@@ -464,12 +518,15 @@ async function getRecentPosts(env, url) {
       time: getTimeAgo(row.created_at)
     }));
     
+    // Cache the result
+    await setCache(cacheKey, recentPosts, env);
+    
     return new Response(JSON.stringify(recentPosts), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   } catch (error) {
     return new Response(JSON.stringify([]), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
     });
   }
 }
@@ -500,6 +557,10 @@ async function collectRedditData(env) {
     
     // Store both in database
     await storeInDatabase(analyzedPosts, analyzedComments, env);
+    
+    // Clear all caches after new data collection
+    await clearCachePattern('', env); // Clear all claudometer cache entries
+    console.log('Cache cleared after data collection');
     
     return new Response(`Collection completed: ${analyzedPosts.length} posts, ${analyzedComments.length} comments processed`);
   } catch (error) {
@@ -1180,4 +1241,69 @@ async function rollbackSentiments(request, env) {
 function getTruncatedText(title, content) {
   const text = `${title || ''} ${content || ''}`.trim();
   return text.length > 500 ? text.substring(0, 500) + '...' : text;
+}
+
+// CACHE HELPER FUNCTIONS
+
+function getCacheKey(endpoint, params = {}) {
+  const paramString = Object.keys(params).length > 0 ? 
+    ':' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&') : '';
+  return `claudometer:${endpoint}${paramString}`;
+}
+
+async function getFromCache(key, env) {
+  try {
+    const cached = await env.CLAUDOMETER_CACHE.get(key);
+    if (!cached) return null;
+    
+    const data = JSON.parse(cached);
+    const now = Date.now();
+    
+    // Check if cache is expired (55 minutes = 3300000ms)
+    if (now - data.timestamp > 3300000) {
+      // Cache expired, delete it
+      await env.CLAUDOMETER_CACHE.delete(key);
+      return null;
+    }
+    
+    return data.content;
+  } catch (error) {
+    console.error('Cache read error:', error);
+    return null;
+  }
+}
+
+async function setCache(key, data, env) {
+  try {
+    const cacheData = {
+      content: data,
+      timestamp: Date.now()
+    };
+    await env.CLAUDOMETER_CACHE.put(key, JSON.stringify(cacheData));
+  } catch (error) {
+    console.error('Cache write error:', error);
+  }
+}
+
+async function clearCachePattern(pattern, env) {
+  try {
+    // Get all keys that match pattern
+    const list = await env.CLAUDOMETER_CACHE.list({ prefix: `claudometer:${pattern}` });
+    
+    // Delete all matching keys
+    const deletePromises = list.keys.map(key => env.CLAUDOMETER_CACHE.delete(key.name));
+    await Promise.all(deletePromises);
+    
+    console.log(`Cleared ${list.keys.length} cache entries for pattern: ${pattern}`);
+  } catch (error) {
+    console.error('Cache clear error:', error);
+  }
+}
+
+function addCacheHeaders(headers = {}) {
+  return {
+    ...headers,
+    'Cache-Control': 'public, max-age=300, s-maxage=300', // 5 minutes browser cache
+    'Vary': 'Accept-Encoding'
+  };
 }

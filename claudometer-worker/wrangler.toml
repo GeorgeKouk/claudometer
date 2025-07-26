@@ -16,6 +16,12 @@ binding = "DB"
 database_name = "claudometer-db"
 database_id = "a9446fa9-c70d-496f-b9e5-a636e72e8865"
 
+# KV Cache binding
+[[kv_namespaces]]
+binding = "CLAUDOMETER_CACHE"
+id = "237333e4f2b949d69dfc97a42a6fd780"
+preview_id = "ba39558f32fe4bcbac01d3bd7859a5ec"
+
 # Cron trigger for hourly data collection
 [triggers]
 crons = ["0 * * * *"]

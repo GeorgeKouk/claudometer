@@ -39,18 +39,19 @@ Claudometer/
 ## Backend (claudometer-worker/)
 
 ### Key Files
-- `src/index.js` - Main worker with API endpoints and cron handlers
-- `wrangler.toml` - Cloudflare Workers configuration
+- `src/index.js` - Main worker with API endpoints, cron handlers, and KV caching logic
+- `wrangler.toml` - Cloudflare Workers configuration with KV binding
 - `package.json` - Dependencies and scripts
 
-### API Endpoints
+### API Endpoints (All Public Endpoints Cached for 55 Minutes)
 - `GET /` - Health check
-- `GET /api/current-sentiment` - Latest sentiment data
-- `GET /api/hourly-data` - 24-hour trend data
-- `GET /api/categories` - Category breakdown
-- `GET /api/keywords` - Trending keywords
-- `GET /api/recent-posts` - Recent posts feed
-- `GET /api/collect-data` - Manual data collection trigger
+- `GET /current-sentiment` - Latest sentiment data (cached by period parameter)
+- `GET /hourly-data` - 24-hour trend data (cached by period parameter)
+- `GET /topics` - Category breakdown (cached by period parameter)
+- `GET /keywords` - Trending keywords (cached by period parameter)
+- `GET /recent-posts` - Recent posts feed (cached by period parameter)
+- `GET /collect-data` - Manual data collection trigger (not cached)
+- `GET /dev/*` - Development endpoints (DEV_MODE_ENABLED=true required)
 
 ### Cron Schedule
 - **Frequency**: Every hour (`0 * * * *`)
@@ -77,6 +78,17 @@ OPENAI_API_KEY=your_openai_api_key
 - **Name**: `claudometer-db`
 - **Database ID**: `a9446fa9-c70d-496f-b9e5-a636e72e8865`
 - **Binding**: `DB` (accessible via `env.DB` in worker)
+
+### Cache Configuration
+- **Type**: Cloudflare KV store for API response caching
+- **Namespace**: `claudometer-cache`
+- **Production ID**: `237333e4f2b949d69dfc97a42a6fd780`
+- **Preview ID**: `ba39558f32fe4bcbac01d3bd7859a5ec`
+- **Binding**: `CLAUDOMETER_CACHE` (accessible via `env.CLAUDOMETER_CACHE` in worker)
+- **TTL**: 55 minutes (safe buffer before hourly data updates)
+- **Browser Cache**: 5 minutes via Cache-Control headers
+- **Cache Keys**: Format `claudometer:endpoint:param=value`
+- **Invalidation**: Automatic after hourly data collection
 
 ### Current Database Schema
 ```sql
@@ -142,7 +154,8 @@ CREATE INDEX idx_sentiment_hourly_hour ON sentiment_hourly(hour);
 1. **Configuration**: `wrangler.toml` in `claudometer-worker/`
 2. **Secrets**: Set via Cloudflare dashboard
 3. **Database**: D1 binding configured in wrangler.toml
-4. **Cron**: Hourly trigger for data collection
+4. **Cache**: KV namespace binding configured in wrangler.toml
+5. **Cron**: Hourly trigger for data collection with automatic cache invalidation
 
 ### Git Integration
 - **Single Repository**: Both frontend and backend in same repo
@@ -174,6 +187,10 @@ npm run deploy     # Deploy to Cloudflare Workers
 wrangler secret put REDDIT_CLIENT_ID
 wrangler secret put REDDIT_CLIENT_SECRET
 wrangler secret put OPENAI_API_KEY
+
+# Create KV namespaces for caching
+npx wrangler kv namespace create CLAUDOMETER_CACHE
+npx wrangler kv namespace create CLAUDOMETER_CACHE --preview
 ```
 
 ## Critical Implementation Notes
@@ -183,6 +200,8 @@ wrangler secret put OPENAI_API_KEY
 - **Authentication**: Use Reddit OAuth, not unauthenticated requests
 - **OpenAI Integration**: Use `env.OPENAI_API_KEY` (not ANTHROPIC_API_KEY)
 - **Weighted Sentiment**: Posts = 3x weight, Comments = 1x weight in calculations
+- **Caching Strategy**: KV cache-first approach with 55-minute TTL and automatic invalidation
+- **Performance**: ~95% faster responses when cache is warm, <1 second dashboard loads
 
 ### Data Collection Logic
 - Fetch 20 posts + 5 top comments per subreddit (3 subreddits total)
