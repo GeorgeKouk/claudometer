@@ -130,7 +130,7 @@ const Claudometer = () => {
     
     return (
       <div className="mx-auto mb-4">
-        <div className="relative w-64 h-40 mx-auto">
+        <div className="relative w-64 h-32 mx-auto">
           <svg viewBox="0 0 200 130" className="w-full h-full">
             {/* Background arc */}
             <path
@@ -178,9 +178,9 @@ const Claudometer = () => {
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fbf6f2 0%, #f6ede5 50%, #ead1bf 100%)' }}>
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-6 sm:mb-12">
           <div className="inline-flex items-center gap-3 mb-4">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #d4a37f 0%, #b8974a 100%)' }}>
               <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -206,16 +206,16 @@ const Claudometer = () => {
         </div>
 
         {/* Time Range Controls */}
-        <div className="flex justify-center gap-3 mb-10">
+        <div className="flex justify-center gap-2 sm:gap-3 mb-5 sm:mb-10">
           {[
-            { value: '24h', label: 'Last 24 Hours' },
-            { value: '7d', label: 'Last 7 Days' },
-            { value: '30d', label: 'Last 30 Days' }
+            { value: '24h', label: 'Last 24 Hours', shortLabel: '24hrs' },
+            { value: '7d', label: 'Last 7 Days', shortLabel: '7 days' },
+            { value: '30d', label: 'Last 30 Days', shortLabel: '30 days' }
           ].map((option) => (
             <button
               key={option.value}
               onClick={() => setTimeframe(option.value)}
-              className={`px-6 py-3 rounded-2xl shadow-lg font-medium transition-all duration-300 hover:shadow-xl hover:scale-105 focus:ring-4 focus:outline-none ${
+              className={`px-3 sm:px-6 py-3 rounded-2xl shadow-lg font-medium transition-all duration-300 hover:shadow-xl hover:scale-105 focus:ring-4 focus:outline-none text-sm sm:text-base ${
                 timeframe === option.value 
                   ? 'transform scale-105' 
                   : ''
@@ -232,7 +232,8 @@ const Claudometer = () => {
                 border: '1px solid rgba(212, 163, 127, 0.2)'
               }}
             >
-              {option.label}
+              <span className="hidden sm:inline">{option.label}</span>
+              <span className="sm:hidden">{option.shortLabel}</span>
             </button>
           ))}
         </div>
@@ -240,8 +241,14 @@ const Claudometer = () => {
         {/* Loading/Error States */}
         {loading && (
           <div className="text-center py-12">
-            <div className="text-2xl font-semibold" style={{ color: '#8b4513' }}>
-              Loading sentiment data...
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 border-4 border-opacity-30 rounded-full animate-spin mb-4" style={{ 
+                borderColor: '#8b4513',
+                borderTopColor: '#d4a37f'
+              }}></div>
+              <div className="text-2xl font-semibold" style={{ color: '#8b4513' }}>
+                Loading sentiment data...
+              </div>
             </div>
           </div>
         )}
@@ -259,14 +266,14 @@ const Claudometer = () => {
 
         {/* Main Dashboard */}
         {!loading && !error && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8 mb-5 sm:mb-10">
           {/* Sentiment Meter */}
           <div className="lg:col-span-1">
-            <div className="rounded-2xl shadow-lg border p-8" style={{ 
+            <div className="rounded-2xl shadow-lg border px-4 sm:px-8 py-3 sm:py-5 h-80" style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.85)',
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
-              <h3 className="text-xl font-semibold text-center mb-6" style={{ color: '#8b4513' }}>
+              <h3 className="text-xl font-semibold text-left mb-6" style={{ color: '#8b4513' }}>
                 Current Community Sentiment
               </h3>
               <SentimentMeter value={currentSentiment} />
@@ -278,14 +285,14 @@ const Claudometer = () => {
 
           {/* Trend Chart */}
           <div className="lg:col-span-2">
-            <div className="rounded-2xl shadow-lg border p-8" style={{ 
+            <div className="rounded-2xl shadow-lg border px-4 sm:px-8 py-3 sm:py-5 h-80" style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.85)',
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
               <h3 className="text-xl font-semibold mb-6" style={{ color: '#8b4513' }}>
                 Sentiment Trend (24h)
               </h3>
-              <ResponsiveContainer width="100%" height={320}>
+              <ResponsiveContainer width="100%" height={230}>
                 <LineChart data={hourlyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ead1bf" />
                   <XAxis 
@@ -335,43 +342,47 @@ const Claudometer = () => {
 
         {/* Category and Keyword Analysis */}
         {!loading && !error && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-5 sm:mb-10">
           {/* Category Breakdown */}
-          <div className="rounded-2xl shadow-lg border p-8" style={{ 
+          <div className="rounded-2xl shadow-lg border p-4 sm:p-8" style={{ 
             backgroundColor: 'rgba(255, 255, 255, 0.85)',
             borderColor: 'rgba(212, 163, 127, 0.3)'
           }}>
             <h3 className="text-xl font-semibold mb-6" style={{ color: '#8b4513' }}>
               Topic Breakdown
             </h3>
-            <div className="flex items-center">
-              <ResponsiveContainer width="60%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={[...topicData].sort((a, b) => b.value - a.value)}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={90}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {[...topicData].sort((a, b) => b.value - a.value).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color || '#B8A082'} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value) => [value + '%', 'Share']} 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                      border: 'none',
-                      borderRadius: '12px',
-                      boxShadow: '0 10px 25px rgba(139, 69, 19, 0.1)'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="w-2/5 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <div className="w-full sm:w-3/5">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={[...topicData].sort((a, b) => b.value - a.value)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={90}
+                      paddingAngle={3}
+                      dataKey="value"
+                      startAngle={90}
+                      endAngle={450}
+                    >
+                      {[...topicData].sort((a, b) => b.value - a.value).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color || '#B8A082'} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value) => [value + '%', 'Share']} 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                        border: 'none',
+                        borderRadius: '12px',
+                        boxShadow: '0 10px 25px rgba(139, 69, 19, 0.1)'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full sm:w-2/5 space-y-3 mt-4 sm:mt-0">
                 {[...topicData].sort((a, b) => b.value - a.value).map((item, index) => (
                   <div key={item.name} className="flex items-center">
                     <div 
@@ -393,7 +404,7 @@ const Claudometer = () => {
           </div>
 
           {/* Top Keywords */}
-          <div className="rounded-2xl shadow-lg border p-8" style={{ 
+          <div className="rounded-2xl shadow-lg border p-4 sm:p-8" style={{ 
             backgroundColor: 'rgba(255, 255, 255, 0.85)',
             borderColor: 'rgba(212, 163, 127, 0.3)'
           }}>
@@ -439,7 +450,7 @@ const Claudometer = () => {
 
         {/* Recent Posts */}
         {!loading && !error && (
-        <div className="rounded-2xl shadow-lg border p-8" style={{ 
+        <div className="rounded-2xl shadow-lg border p-4 sm:p-8" style={{ 
           backgroundColor: 'rgba(255, 255, 255, 0.85)',
           borderColor: 'rgba(212, 163, 127, 0.3)'
         }}>
@@ -448,33 +459,36 @@ const Claudometer = () => {
           </h3>
           <div className="space-y-4">
             {recentPosts.map((post) => (
-              <div key={post.id} className="border-l-4 pl-6 py-4 rounded-r-xl" style={{ 
+              <div key={post.id} className="border-l-4 pl-6 py-2 sm:py-4 rounded-r-xl" style={{ 
                 borderColor: getSentimentColor(post.sentiment),
                 backgroundColor: 'rgba(246, 237, 229, 0.3)'
               }}>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 text-sm font-medium mb-2" style={{ color: '#9f6841' }}>
-                      <span className="font-semibold" style={{ color: '#8b4513' }}>
-                        {post.subreddit}
-                      </span>
-                      <span>•</span>
-                      <span>{post.category}</span>
-                      <span>•</span>
-                      <span>{post.time}</span>
-                    </div>
-                    <div className="font-semibold text-base" style={{ color: '#8b4513' }}>
-                      {post.title}
-                    </div>
+                <div className="space-y-1 sm:space-y-2">
+                  {/* First row: Subreddit • Topic • Time */}
+                  <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#9f6841' }}>
+                    <span className="font-semibold" style={{ color: '#8b4513' }}>
+                      {post.subreddit}
+                    </span>
+                    <span>•</span>
+                    <span>{post.category}</span>
+                    <span>•</span>
+                    <span>{post.time}</span>
                   </div>
-                  <div className="ml-6 text-right">
+                  
+                  {/* Second row: Title */}
+                  <div className="font-semibold text-base" style={{ color: '#8b4513' }}>
+                    {post.title}
+                  </div>
+                  
+                  {/* Third row: Sentiment (bottom left) */}
+                  <div className="flex items-center gap-2">
                     <div 
-                      className="text-xl font-bold"
+                      className="text-sm font-medium"
                       style={{ color: getSentimentColor(post.sentiment) }}
                     >
                       {(post.sentiment * 100).toFixed(0)}%
                     </div>
-                    <div className="text-xs font-medium" style={{ color: '#9f6841' }}>
+                    <div className="text-sm font-medium" style={{ color: getSentimentColor(post.sentiment) }}>
                       {getSentimentLabel(post.sentiment)}
                     </div>
                   </div>
