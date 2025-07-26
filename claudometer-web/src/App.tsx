@@ -199,12 +199,14 @@ const Claudometer = () => {
         {/* Header */}
         <div className="text-center mb-6 sm:mb-12">
           <div className="inline-flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #d4a37f 0%, #b8974a 100%)' }}>
-              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-              </svg>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden" style={{ backgroundColor: '#d4a37f' }}>
+              <img 
+              src="/logo.png" 
+              alt="Claudometer Logo" 
+              className="w-full h-full object-contain mix-blend-multiply p-1.5"
+            />
             </div>
-            <h1 className="text-5xl font-bold" style={{ color: '#8b4513' }}>
+            <h1 className="text-5xl font-bold" style={{ color: '#824920' }}>
               Claudometer
             </h1>
           </div>
