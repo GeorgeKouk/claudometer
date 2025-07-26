@@ -7,6 +7,9 @@ compatibility_date = "2025-07-23"
 # REDDIT_CLIENT_SECRET  
 # OPENAI_API_KEY
 
+[vars]
+DEV_MODE_ENABLED = "false"  # Set to "true" to enable dev endpoints
+
 # D1 Database binding
 [[d1_databases]]
 binding = "DB"
