@@ -379,10 +379,7 @@ const Claudometer = () => {
                         {item.name}
                       </div>
                       <div className="text-xs font-medium" style={{ color: '#9f6841' }}>
-                        {getSentimentLabel(item.sentiment)}
-                      </div>
-                      <div className="text-xs font-medium" style={{ color: '#9f6841' }}>
-                        {item.referenceCount || 0} references
+                        {getSentimentLabel(item.sentiment)} • {item.referenceCount || 0} references
                       </div>
                     </div>
                   </div>
