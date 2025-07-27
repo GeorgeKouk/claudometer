@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 interface PostItem {
@@ -29,6 +29,12 @@ interface ReevaluationResult {
   error?: string;
 }
 
+interface TopicInfo {
+  name: string;
+  color: string;
+  count: number;
+}
+
 const Reevaluation = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -38,6 +44,8 @@ const Reevaluation = () => {
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [availableTopics, setAvailableTopics] = useState<TopicInfo[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
 
   const API_BASE = 'https://api.claudometer.app';
 
@@ -56,6 +64,53 @@ const Reevaluation = () => {
     return utcDate.toISOString();
   };
 
+  // Load available topics from API
+  const loadTopics = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/topics?period=all`);
+      if (response.ok) {
+        const topicData = await response.json();
+        const topics: TopicInfo[] = topicData.map((topic: any) => ({
+          name: topic.name,
+          color: topic.color || '#CCCCCC',
+          count: topic.referenceCount || 0
+        }));
+        setAvailableTopics(topics);
+        
+        // Select all topics by default
+        const allTopicNames = new Set(topics.map(t => t.name));
+        setSelectedTopics(allTopicNames);
+      }
+    } catch (error) {
+      console.error('Failed to load topics:', error);
+    }
+  };
+
+  // Topic selection handlers
+  const toggleTopic = (topicName: string) => {
+    const newSelected = new Set(selectedTopics);
+    if (newSelected.has(topicName)) {
+      newSelected.delete(topicName);
+    } else {
+      newSelected.add(topicName);
+    }
+    setSelectedTopics(newSelected);
+  };
+
+  const selectAllTopics = () => {
+    const allTopicNames = new Set(availableTopics.map(t => t.name));
+    setSelectedTopics(allTopicNames);
+  };
+
+  const clearAllTopics = () => {
+    setSelectedTopics(new Set());
+  };
+
+  const selectOldTopics = () => {
+    const oldTopics = new Set(['General', 'Claude Code', 'API', 'Web Interface']);
+    setSelectedTopics(oldTopics);
+  };
+
   const fetchPosts = async () => {
     if (!startDate || !endDate) {
       setError('Please select both start and end dates');
@@ -71,9 +126,14 @@ const Reevaluation = () => {
       const startUTC = convertToUTC(startDate, false);
       const endUTC = convertToUTC(endDate, true);
       
-      const response = await fetch(
-        `${API_BASE}/dev/posts?start_date=${encodeURIComponent(startUTC)}&end_date=${encodeURIComponent(endUTC)}`
-      );
+      // Build URL with selected topics
+      let url = `${API_BASE}/dev/posts?start_date=${encodeURIComponent(startUTC)}&end_date=${encodeURIComponent(endUTC)}`;
+      if (selectedTopics.size > 0 && selectedTopics.size < availableTopics.length) {
+        const categoriesParam = Array.from(selectedTopics).join(',');
+        url += `&categories=${encodeURIComponent(categoriesParam)}`;
+      }
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch posts: ${response.status}`);
@@ -87,6 +147,11 @@ const Reevaluation = () => {
       setLoading(false);
     }
   };
+
+  // Load topics on component mount
+  useEffect(() => {
+    loadTopics();
+  }, []);
 
   const reevaluateAll = async () => {
     if (items.length === 0) {
@@ -264,7 +329,7 @@ const Reevaluation = () => {
             <div className="flex items-end">
               <button
                 onClick={fetchPosts}
-                disabled={loading || !startDate || !endDate}
+                disabled={loading || !startDate || !endDate || selectedTopics.size === 0}
                 className="w-full px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-50"
                 style={{ 
                   backgroundColor: '#8b4513',
@@ -275,6 +340,82 @@ const Reevaluation = () => {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Topic Selection */}
+        <div className="rounded-2xl shadow-lg border p-6 mb-6" style={{ 
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          borderColor: 'rgba(212, 163, 127, 0.3)'
+        }}>
+          <h3 className="text-xl font-semibold mb-4" style={{ color: '#8b4513' }}>
+            Select Topics to Analyze
+          </h3>
+          
+          {/* Control Buttons */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              onClick={selectAllTopics}
+              className="px-3 py-1 text-sm rounded-lg font-medium transition-all"
+              style={{ 
+                backgroundColor: selectedTopics.size === availableTopics.length ? '#8b4513' : 'rgba(139, 69, 19, 0.1)',
+                color: selectedTopics.size === availableTopics.length ? 'white' : '#8b4513',
+                border: '1px solid rgba(139, 69, 19, 0.3)'
+              }}
+            >
+              Select All ({availableTopics.length})
+            </button>
+            <button
+              onClick={clearAllTopics}
+              className="px-3 py-1 text-sm rounded-lg font-medium transition-all"
+              style={{ 
+                backgroundColor: selectedTopics.size === 0 ? '#8b4513' : 'rgba(139, 69, 19, 0.1)',
+                color: selectedTopics.size === 0 ? 'white' : '#8b4513',
+                border: '1px solid rgba(139, 69, 19, 0.3)'
+              }}
+            >
+              Clear All
+            </button>
+            <button
+              onClick={selectOldTopics}
+              className="px-3 py-1 text-sm rounded-lg font-medium transition-all"
+              style={{ 
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#dc2626',
+                border: '1px solid rgba(239, 68, 68, 0.3)'
+              }}
+            >
+              Old Topics Only (4)
+            </button>
+          </div>
+
+          {/* Topic Tags */}
+          <div className="flex flex-wrap gap-2">
+            {availableTopics.map((topic) => {
+              const isSelected = selectedTopics.has(topic.name);
+              return (
+                <button
+                  key={topic.name}
+                  onClick={() => toggleTopic(topic.name)}
+                  className="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1"
+                  style={{
+                    backgroundColor: isSelected ? topic.color : 'rgba(255, 255, 255, 0.8)',
+                    color: isSelected ? 'white' : topic.color,
+                    border: `2px solid ${topic.color}`,
+                    boxShadow: isSelected ? `0 2px 8px ${topic.color}40` : 'none'
+                  }}
+                >
+                  {isSelected && <span>✓</span>}
+                  {topic.name} ({topic.count})
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedTopics.size > 0 && (
+            <div className="mt-3 text-sm" style={{ color: '#9f6841' }}>
+              Selected: {selectedTopics.size} topic{selectedTopics.size !== 1 ? 's' : ''}
+            </div>
+          )}
         </div>
 
         {/* Error Display */}

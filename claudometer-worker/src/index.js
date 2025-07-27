@@ -1141,6 +1141,7 @@ async function getDevPosts(env, url) {
   try {
     const startDate = url.searchParams.get('start_date');
     const endDate = url.searchParams.get('end_date');
+    const categories = url.searchParams.get('categories');
     
     if (!startDate || !endDate) {
       return new Response(JSON.stringify({ error: 'start_date and end_date required' }), {
@@ -1149,24 +1150,35 @@ async function getDevPosts(env, url) {
       });
     }
 
-    // Get posts and comments in date range
+    // Build category filter
+    let categoryFilter = '';
+    let categoryParams = [];
+    if (categories) {
+      const categoryList = categories.split(',').map(cat => cat.trim()).filter(cat => cat.length > 0);
+      if (categoryList.length > 0) {
+        categoryFilter = ` AND category IN (${categoryList.map(() => '?').join(',')})`;
+        categoryParams = categoryList;
+      }
+    }
+
+    // Get posts and comments in date range with optional category filtering
     const postsStmt = env.DB.prepare(`
       SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, 'post' as type
       FROM posts 
-      WHERE processed_at >= ? AND processed_at <= ?
+      WHERE processed_at >= ? AND processed_at <= ?${categoryFilter}
       ORDER BY processed_at DESC
     `);
     
     const commentsStmt = env.DB.prepare(`
       SELECT id, post_id, body as content, subreddit, sentiment, category, keywords, processed_at, 'comment' as type
       FROM comments 
-      WHERE processed_at >= ? AND processed_at <= ?
+      WHERE processed_at >= ? AND processed_at <= ?${categoryFilter}
       ORDER BY processed_at DESC
     `);
 
     const [postsResults, commentsResults] = await Promise.all([
-      postsStmt.bind(startDate, endDate).all(),
-      commentsStmt.bind(startDate, endDate).all()
+      postsStmt.bind(startDate, endDate, ...categoryParams).all(),
+      commentsStmt.bind(startDate, endDate, ...categoryParams).all()
     ]);
 
     // Combine and format data
