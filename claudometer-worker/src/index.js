@@ -16,7 +16,7 @@ export default {
 
     // CORS headers
     const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': 'https://claudometer.app',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     };
@@ -38,8 +38,7 @@ export default {
         return await getKeywordData(env, url);
       } else if (path === '/recent-posts') {
         return await getRecentPosts(env, url);
-      } else if (path === '/collect-data') {
-        return await collectRedditData(env);
+      // Removed public /collect-data endpoint - only accessible via cron
       } else if (path === '/dev/posts' && env.DEV_MODE_ENABLED === 'true') {
         return await getDevPosts(env, url);
       } else if (path === '/dev/reevaluate' && env.DEV_MODE_ENABLED === 'true') {
@@ -1058,7 +1057,7 @@ async function storeInDatabase(posts, comments, env) {
 
 function getCorsHeaders() {
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 'https://claudometer.app',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
@@ -1265,6 +1264,8 @@ async function reevaluateSentiments(request, env) {
               newSentiment: newSentiment,
               oldCategory: item.category,
               newCategory: newCategory,
+              oldKeywords: item.keywords,
+              newKeywords: newKeywords,
               truncatedContent: item.truncatedContent
             });
           }

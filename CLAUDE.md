@@ -50,7 +50,7 @@ Claudometer/
 - `GET /topics` - Category breakdown (cached by period parameter)
 - `GET /keywords` - Trending keywords (cached by period parameter)
 - `GET /recent-posts` - Recent posts feed (cached by period parameter)
-- `GET /collect-data` - Manual data collection trigger (not cached)
+- `GET /collect-data` - Manual data collection trigger (REMOVED for security - only accessible via cron)
 - `GET /dev/*` - Development endpoints (DEV_MODE_ENABLED=true required)
 
 ### Cron Schedule
@@ -226,17 +226,17 @@ npx wrangler kv namespace create CLAUDOMETER_CACHE --preview
 ## Deployed URLs
 
 ### Production Environment
-- **Web Application**: https://claudometer.pages.dev
-- **API Backend**: https://claudometer-api.georgekouk.workers.dev/api/
+- **Web Application**: https://claudometer.app
+- **API Backend**: https://api.claudometer.app
 
 ### API Endpoints (Production)
-- Health check: https://claudometer-api.georgekouk.workers.dev/
-- Current sentiment: https://claudometer-api.georgekouk.workers.dev/api/current-sentiment
-- Hourly data: https://claudometer-api.georgekouk.workers.dev/api/hourly-data
-- Categories: https://claudometer-api.georgekouk.workers.dev/api/categories
-- Keywords: https://claudometer-api.georgekouk.workers.dev/api/keywords
-- Recent posts: https://claudometer-api.georgekouk.workers.dev/api/recent-posts
-- Manual data collection: https://claudometer-api.georgekouk.workers.dev/api/collect-data
+- Health check: https://api.claudometer.app/
+- Current sentiment: https://api.claudometer.app/current-sentiment
+- Hourly data: https://api.claudometer.app/hourly-data
+- Categories: https://api.claudometer.app/topics
+- Keywords: https://api.claudometer.app/keywords
+- Recent posts: https://api.claudometer.app/recent-posts
+- Manual data collection: REMOVED (only accessible via hourly cron)
 
 ## Support Resources
 - [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
