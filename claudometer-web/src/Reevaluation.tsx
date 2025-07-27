@@ -23,6 +23,8 @@ interface ReevaluationResult {
   newSentiment: number;
   oldCategory: string;
   newCategory: string;
+  oldKeywords: string;
+  newKeywords: string;
   truncatedContent: string;
   error?: string;
 }
@@ -135,7 +137,8 @@ const Reevaluation = () => {
             type: result.type,
             oldSentiment: result.oldSentiment,
             oldCategory: result.oldCategory,
-            oldKeywords: items.find(i => i.id === result.id)?.keywords
+            oldKeywords: items.find(i => i.id === result.id)?.keywords,
+            newKeywords: result.newKeywords
           }]
         }),
       });
@@ -158,7 +161,8 @@ const Reevaluation = () => {
         type: result.type,
         oldSentiment: result.oldSentiment,
         oldCategory: result.oldCategory,
-        oldKeywords: items.find(i => i.id === result.id)?.keywords
+        oldKeywords: items.find(i => i.id === result.id)?.keywords,
+        newKeywords: result.newKeywords
       }));
 
       const response = await fetch(`${API_BASE}/dev/rollback`, {
@@ -386,6 +390,29 @@ const Reevaluation = () => {
                           </div>
                           <div className="text-xs" style={{ color: '#9f6841' }}>
                             Category: {result.newCategory}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                          <div className="text-xs font-medium mb-1" style={{ color: '#9f6841' }}>Old Keywords</div>
+                          <div className="text-xs p-2 rounded" style={{ 
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            color: '#dc2626',
+                            minHeight: '2rem'
+                          }}>
+                            {result.oldKeywords || 'None'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium mb-1" style={{ color: '#9f6841' }}>New Keywords</div>
+                          <div className="text-xs p-2 rounded" style={{ 
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            color: '#16a34a',
+                            minHeight: '2rem'
+                          }}>
+                            {result.newKeywords || 'None'}
                           </div>
                         </div>
                       </div>
