@@ -217,7 +217,7 @@ const Claudometer = () => {
             </h1>
           </div>
           <p className="text-lg font-medium max-w-2xl mx-auto" style={{ color: '#9f6841' }}>
-            Community sentiment tracking for Claude AI across Reddit communities
+            Sentiment tracking for Claude AI across Reddit communities
           </p>
           {nextRefresh && (
             <p className="text-sm font-medium mt-2" style={{ color: '#9f6841' }}>
