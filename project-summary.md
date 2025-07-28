@@ -36,7 +36,7 @@ See CLAUDE.md for current database schema and technical details.
 - `GET /` - Health check
 - `GET /current-sentiment` - Latest weighted sentiment (cached by period)
 - `GET /hourly-data` - 24h trend data (cached by period)
-- `GET /topics` - Category breakdown (cached by period)
+- `GET /topics` - Topic breakdown (cached by period)
 - `GET /keywords` - Trending keywords (cached by period)
 - `GET /recent-posts` - Latest posts (cached by period)
 - `GET /collect-data` - Manual data collection (not cached)

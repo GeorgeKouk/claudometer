@@ -26,7 +26,7 @@ Claudometer/
 ### Features
 - Real-time sentiment meter with gauge visualization
 - 24-hour trend charts using Recharts
-- Category breakdown pie charts
+- Topic breakdown pie charts
 - Trending keywords analysis
 - Recent posts feed with sentiment scores
 
@@ -47,7 +47,7 @@ Claudometer/
 - `GET /` - Health check
 - `GET /current-sentiment` - Latest sentiment data (cached by period parameter)
 - `GET /hourly-data` - 24-hour trend data (cached by period parameter)
-- `GET /topics` - Category breakdown (cached by period parameter)
+- `GET /topics` - Topic breakdown (cached by period parameter)
 - `GET /keywords` - Trending keywords (cached by period parameter)
 - `GET /recent-posts` - Recent posts feed (cached by period parameter)
 - `GET /collect-data` - Manual data collection trigger (REMOVED for security - only accessible via cron)
@@ -90,56 +90,21 @@ OPENAI_API_KEY=your_openai_api_key
 - **Cache Keys**: Format `claudometer:endpoint:param=value`
 - **Invalidation**: Automatic after hourly data collection
 
-### Current Database Schema
-```sql
--- Posts table
-CREATE TABLE posts (
-  id TEXT PRIMARY KEY,
-  title TEXT,
-  content TEXT,
-  subreddit TEXT,
-  created_at TEXT,
-  score INTEGER,
-  sentiment REAL,
-  category TEXT,
-  keywords TEXT,
-  processed_at TEXT DEFAULT (datetime('now'))
-);
-
--- Comments table  
-CREATE TABLE comments (
-  id TEXT PRIMARY KEY,
-  post_id TEXT,
-  body TEXT,
-  subreddit TEXT,
-  score INTEGER,
-  sentiment REAL,
-  category TEXT,
-  keywords TEXT,
-  created_at TEXT,
-  processed_at TEXT DEFAULT (datetime('now')),
-  FOREIGN KEY (post_id) REFERENCES posts(id)
-);
-
--- Hourly aggregation table
-CREATE TABLE sentiment_hourly (
-  hour TEXT PRIMARY KEY,
-  avg_sentiment REAL,
-  post_count INTEGER,
-  category_breakdown TEXT,
-  keyword_counts TEXT,
-  comment_count INTEGER DEFAULT 0,
-  weighted_sentiment REAL DEFAULT 0.5
-);
-
--- Performance indexes
-CREATE INDEX idx_comments_post_id ON comments(post_id);
-CREATE INDEX idx_comments_processed_at ON comments(processed_at);
-CREATE INDEX idx_posts_processed_at ON posts(processed_at);
-CREATE INDEX idx_posts_subreddit ON posts(subreddit);
-CREATE INDEX idx_comments_subreddit ON comments(subreddit);
-CREATE INDEX idx_sentiment_hourly_hour ON sentiment_hourly(hour);
+### Current Database Tables
+**Note**: Schema evolves over time. For current schema, query production database:
+```bash
+npx wrangler d1 execute claudometer-db --remote --command "PRAGMA table_info(table_name);"
 ```
+
+**Main Tables:**
+- `posts` - Reddit posts with sentiment analysis
+- `comments` - Reddit comments with sentiment analysis  
+- `sentiment_hourly` - Hourly aggregated sentiment data
+- `topics` - Topic definitions with colors (used by API endpoints)
+
+**System Tables:**
+- `_cf_METADATA` - Cloudflare internal metadata
+- `sqlite_sequence` - SQLite auto-increment sequences
 
 ## Deployment Process
 
@@ -233,7 +198,7 @@ npx wrangler kv namespace create CLAUDOMETER_CACHE --preview
 - Health check: https://api.claudometer.app/
 - Current sentiment: https://api.claudometer.app/current-sentiment
 - Hourly data: https://api.claudometer.app/hourly-data
-- Categories: https://api.claudometer.app/topics
+- Topics: https://api.claudometer.app/topics
 - Keywords: https://api.claudometer.app/keywords
 - Recent posts: https://api.claudometer.app/recent-posts
 - Manual data collection: REMOVED (only accessible via hourly cron)
