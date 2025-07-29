@@ -359,20 +359,11 @@ const Claudometer = () => {
                 Sentiment Trend ({timeframe === '24h' ? '24h' : timeframe === '7d' ? '7 days' : timeframe === '30d' ? '30 days' : 'All Time'})
               </h3>
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={[
-                  ...hourlyData,
-                  // Add events as data points for testing
-                  ...events.map(event => ({
-                    time: event.date,
-                    sentiment: 0.5, // Show events at middle of chart
-                    post_count: 0,
-                    isEvent: true,
-                    eventTitle: event.title
-                  }))
-                ]}>
+                <LineChart data={hourlyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ead1bf" />
                   <XAxis 
-                    dataKey="time" 
+                    dataKey="time"
+                    type="category"
                     tick={{ fill: '#9f6841', fontSize: 12 }}
                     axisLine={{ stroke: '#ead1bf' }}
                     tickFormatter={(value) => {
@@ -430,31 +421,16 @@ const Claudometer = () => {
                     iconType="line"
                   />
                   
-                  {/* Event annotations */}
-                  {events.map((event) => {
-                    // Find closest timestamp in chart data
-                    const eventTime = new Date(event.date).getTime();
-                    let closestTime = hourlyData[0]?.time;
-                    let minDiff = Math.abs(new Date(hourlyData[0]?.time || 0).getTime() - eventTime);
-                    
-                    hourlyData.forEach((dataPoint) => {
-                      const diff = Math.abs(new Date(dataPoint.time).getTime() - eventTime);
-                      if (diff < minDiff) {
-                        minDiff = diff;
-                        closestTime = dataPoint.time;
-                      }
-                    });
-                    
-                    return (
-                      <ReferenceLine
-                        key={event.id}
-                        x={closestTime}
-                        stroke="#8b4513"
-                        strokeWidth={2}
-                        strokeDasharray="2 2"
-                      />
-                    );
-                  })}
+                  {/* Event annotations - use exact timestamp */}
+                  {events.map((event) => (
+                    <ReferenceLine
+                      key={event.id}
+                      x={event.date}
+                      stroke="#8b4513"
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                    />
+                  ))}
                   
                   <Line 
                     yAxisId="sentiment"
