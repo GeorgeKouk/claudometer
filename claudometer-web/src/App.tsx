@@ -386,10 +386,17 @@ const Claudometer = () => {
                     }}
                   />
                   <YAxis 
+                    yAxisId="sentiment"
                     domain={[0, 1]} 
                     tickFormatter={(value) => (value * 100).toFixed(0) + '%'}
                     tick={{ fill: '#9f6841', fontSize: 12 }}
                     axisLine={{ stroke: '#ead1bf' }}
+                  />
+                  <YAxis 
+                    yAxisId="posts"
+                    orientation="right"
+                    domain={[0, 'dataMax']}
+                    hide={true}
                   />
                   <Tooltip 
                     formatter={(value, name) => {
@@ -437,15 +444,17 @@ const Claudometer = () => {
                   ))}
                   
                   <Line 
+                    yAxisId="sentiment"
                     type="monotone" 
                     dataKey="sentiment" 
                     stroke="#d4a37f" 
                     strokeWidth={3}
-                    dot={{ fill: '#d4a37f', strokeWidth: 2, r: 5 }}
-                    activeDot={{ r: 7, stroke: '#d4a37f', strokeWidth: 2, fill: '#ffffff' }}
+                    dot={{ fill: '#d4a37f', strokeWidth: 2, r: 3 }}
+                    activeDot={{ r: 5, stroke: '#d4a37f', strokeWidth: 2, fill: '#ffffff' }}
                     name="Sentiment"
                   />
                   <Line 
+                    yAxisId="posts"
                     type="monotone" 
                     dataKey="post_count" 
                     stroke="#A0522D" 
