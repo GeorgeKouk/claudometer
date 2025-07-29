@@ -80,6 +80,7 @@ const Claudometer = () => {
       setHourlyData(hourlyDataRaw.data || []);
       setEvents(hourlyDataRaw.events || []);
       console.log('Events loaded:', hourlyDataRaw.events);
+      console.log('First 3 chart timestamps:', (hourlyDataRaw.data || []).slice(0, 3).map((d: any) => d.time));
       
       // Store raw data for filtering (sort posts by most recent first)
       const sortedPosts = (postsDataRaw || []).sort((a: any, b: any) => {
@@ -432,27 +433,30 @@ const Claudometer = () => {
                   </ReferenceLine>
                   
                   {/* Event annotations as reference lines */}
-                  {events.map((event) => (
-                    <ReferenceLine
-                      key={event.id}
-                      x={event.date}
-                      stroke="#8b4513"
-                      strokeWidth={3}
-                      opacity={0.8}
-                    >
-                      <Label 
-                        value={event.title} 
-                        position="top" 
-                        offset={5}
-                        style={{ 
-                          fill: '#8b4513', 
-                          fontSize: '10px', 
-                          fontWeight: 'bold',
-                          textAnchor: 'middle'
-                        }}
-                      />
-                    </ReferenceLine>
-                  ))}
+                  {events.map((event) => {
+                    console.log(`Event ${event.id}: date=${event.date}, title=${event.title}`);
+                    return (
+                      <ReferenceLine
+                        key={event.id}
+                        x={event.date}
+                        stroke="#8b4513"
+                        strokeWidth={3}
+                        opacity={0.8}
+                      >
+                        <Label 
+                          value={event.title} 
+                          position="top" 
+                          offset={5}
+                          style={{ 
+                            fill: '#8b4513', 
+                            fontSize: '10px', 
+                            fontWeight: 'bold',
+                            textAnchor: 'middle'
+                          }}
+                        />
+                      </ReferenceLine>
+                    );
+                  })}
                   
                   <Line 
                     yAxisId="sentiment"
