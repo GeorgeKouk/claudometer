@@ -421,15 +421,30 @@ const Claudometer = () => {
                   />
                   
                   {/* Event annotations */}
-                  {events.map((event) => (
-                    <ReferenceLine
-                      key={event.id}
-                      x={event.date}
-                      stroke="#8b4513"
-                      strokeWidth={2}
-                      strokeDasharray="2 2"
-                    />
-                  ))}
+                  {events.map((event) => {
+                    // Find closest timestamp in chart data
+                    const eventTime = new Date(event.date).getTime();
+                    let closestTime = hourlyData[0]?.time;
+                    let minDiff = Math.abs(new Date(hourlyData[0]?.time || 0).getTime() - eventTime);
+                    
+                    hourlyData.forEach((dataPoint) => {
+                      const diff = Math.abs(new Date(dataPoint.time).getTime() - eventTime);
+                      if (diff < minDiff) {
+                        minDiff = diff;
+                        closestTime = dataPoint.time;
+                      }
+                    });
+                    
+                    return (
+                      <ReferenceLine
+                        key={event.id}
+                        x={closestTime}
+                        stroke="#8b4513"
+                        strokeWidth={2}
+                        strokeDasharray="2 2"
+                      />
+                    );
+                  })}
                   
                   <Line 
                     yAxisId="sentiment"
