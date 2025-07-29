@@ -442,13 +442,13 @@ const Claudometer = () => {
                     >
                       <Label 
                         value={event.title} 
-                        position="topLeft" 
+                        position="top" 
                         offset={5}
                         style={{ 
                           fill: '#8b4513', 
                           fontSize: '10px', 
                           fontWeight: 'bold',
-                          textAnchor: 'start'
+                          textAnchor: 'middle'
                         }}
                       />
                     </ReferenceLine>
