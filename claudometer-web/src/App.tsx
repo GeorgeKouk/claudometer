@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Label, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Legend } from 'recharts';
 import Reevaluation from './Reevaluation';
 import Footer from './components/Footer';
 import Contact from './pages/Contact';
@@ -79,8 +79,6 @@ const Claudometer = () => {
       // Handle new hourly data structure: { data: [...], events: [...] }
       setHourlyData(hourlyDataRaw.data || []);
       setEvents(hourlyDataRaw.events || []);
-      console.log('Events loaded:', hourlyDataRaw.events);
-      console.log('First 3 chart timestamps:', (hourlyDataRaw.data || []).slice(0, 3).map((d: any) => d.time));
       
       // Store raw data for filtering (sort posts by most recent first)
       const sortedPosts = (postsDataRaw || []).sort((a: any, b: any) => {
@@ -359,7 +357,6 @@ const Claudometer = () => {
             }}>
               <h3 className="text-xl font-semibold mb-6" style={{ color: '#8b4513' }}>
                 Sentiment Trend ({timeframe === '24h' ? '24h' : timeframe === '7d' ? '7 days' : timeframe === '30d' ? '30 days' : 'All Time'})
-                {events.length > 0 && <span className="text-sm ml-2">({events.length} events)</span>}
               </h3>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={hourlyData}>
@@ -423,49 +420,16 @@ const Claudometer = () => {
                     iconType="line"
                   />
                   
-                  {/* Test reference line - should always show */}
-                  <ReferenceLine
-                    x={hourlyData[Math.floor(hourlyData.length / 2)]?.time}
-                    stroke="#ff0000"
-                    strokeWidth={2}
-                  >
-                    <Label value="TEST LINE" position="top" />
-                  </ReferenceLine>
-                  
-                  {/* Event annotations as reference lines */}
-                  {events.map((event) => {
-                    const eventTimestamp = new Date(event.date).getTime();
-                    const chartStartTime = hourlyData.length > 0 ? new Date(hourlyData[0].time).getTime() : 0;
-                    const chartEndTime = hourlyData.length > 0 ? new Date(hourlyData[hourlyData.length - 1].time).getTime() : 0;
-                    
-                    console.log(`Event ${event.id}: date=${event.date}, timestamp=${eventTimestamp}, chartRange=${chartStartTime}-${chartEndTime}`);
-                    
-                    // Only show events within chart time range (with some buffer)
-                    if (eventTimestamp >= chartStartTime - (3600000 * 2) && eventTimestamp <= chartEndTime + (3600000 * 2)) {
-                      return (
-                        <ReferenceLine
-                          key={event.id}
-                          x={event.date}
-                          stroke="#8b4513"
-                          strokeWidth={3}
-                          opacity={0.8}
-                        >
-                          <Label 
-                            value={event.title} 
-                            position="top" 
-                            offset={5}
-                            style={{ 
-                              fill: '#8b4513', 
-                              fontSize: '10px', 
-                              fontWeight: 'bold',
-                              textAnchor: 'middle'
-                            }}
-                          />
-                        </ReferenceLine>
-                      );
-                    }
-                    return null;
-                  }).filter(Boolean)}
+                  {/* Event annotations */}
+                  {events.map((event) => (
+                    <ReferenceLine
+                      key={event.id}
+                      x={event.date}
+                      stroke="#8b4513"
+                      strokeWidth={2}
+                      strokeDasharray="2 2"
+                    />
+                  ))}
                   
                   <Line 
                     yAxisId="sentiment"
