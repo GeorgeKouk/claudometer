@@ -359,11 +359,20 @@ const Claudometer = () => {
                 Sentiment Trend ({timeframe === '24h' ? '24h' : timeframe === '7d' ? '7 days' : timeframe === '30d' ? '30 days' : 'All Time'})
               </h3>
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={hourlyData}>
+                <LineChart data={[
+                  ...hourlyData,
+                  // Add events as vertical line markers
+                  ...events.map(event => ({
+                    time: event.date,
+                    sentiment: null,
+                    post_count: null,
+                    eventMarker: 1, // Will be used for ReferenceLine
+                    eventTitle: event.title
+                  }))
+                ]}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ead1bf" />
                   <XAxis 
                     dataKey="time"
-                    type="category"
                     tick={{ fill: '#9f6841', fontSize: 12 }}
                     axisLine={{ stroke: '#ead1bf' }}
                     tickFormatter={(value) => {
@@ -421,44 +430,16 @@ const Claudometer = () => {
                     iconType="line"
                   />
                   
-                  {/* Event annotations - use closest timestamp from chart data */}
-                  {events.map((event) => {
-                    if (hourlyData.length === 0) return null;
-                    
-                    // Find closest timestamp in chart data
-                    const eventTime = new Date(event.date).getTime();
-                    let closestDataPoint = hourlyData[0];
-                    let minDiff = Math.abs(new Date(hourlyData[0].time).getTime() - eventTime);
-                    
-                    hourlyData.forEach((dataPoint) => {
-                      const diff = Math.abs(new Date(dataPoint.time).getTime() - eventTime);
-                      if (diff < minDiff) {
-                        minDiff = diff;
-                        closestDataPoint = dataPoint;
-                      }
-                    });
-                    
-                    return (
-                      <ReferenceLine
-                        key={event.id}
-                        x={closestDataPoint.time}
-                        stroke="#8b4513"
-                        strokeWidth={2}
-                        strokeDasharray="4 4"
-                      />
-                    );
-                  }).filter(Boolean)}
+                  {/* Event annotations as ReferenceLine at exact event timestamps */}
+                  {events.map((event) => (
+                    <ReferenceLine
+                      key={event.id}
+                      x={event.date}
+                      stroke="#ff0000"
+                      strokeWidth={3}
+                    />
+                  ))}
                   
-                  <Line 
-                    yAxisId="sentiment"
-                    type="monotone" 
-                    dataKey="sentiment" 
-                    stroke="#d4a37f" 
-                    strokeWidth={3}
-                    dot={{ fill: '#d4a37f', strokeWidth: 2, r: 3 }}
-                    activeDot={{ r: 5, stroke: '#d4a37f', strokeWidth: 2, fill: '#ffffff' }}
-                    name="Sentiment"
-                  />
                   <Line 
                     yAxisId="posts"
                     type="monotone" 
@@ -469,6 +450,16 @@ const Claudometer = () => {
                     dot={false}
                     opacity={0.6}
                     name="Post Count"
+                  />
+                  <Line 
+                    yAxisId="sentiment"
+                    type="monotone" 
+                    dataKey="sentiment" 
+                    stroke="#d4a37f" 
+                    strokeWidth={3}
+                    dot={{ fill: '#d4a37f', strokeWidth: 2, r: 3 }}
+                    activeDot={{ r: 5, stroke: '#d4a37f', strokeWidth: 2, fill: '#ffffff' }}
+                    name="Sentiment"
                   />
                 </LineChart>
               </ResponsiveContainer>
