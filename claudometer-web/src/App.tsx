@@ -434,29 +434,38 @@ const Claudometer = () => {
                   
                   {/* Event annotations as reference lines */}
                   {events.map((event) => {
-                    console.log(`Event ${event.id}: date=${event.date}, title=${event.title}`);
-                    return (
-                      <ReferenceLine
-                        key={event.id}
-                        x={event.date}
-                        stroke="#8b4513"
-                        strokeWidth={3}
-                        opacity={0.8}
-                      >
-                        <Label 
-                          value={event.title} 
-                          position="top" 
-                          offset={5}
-                          style={{ 
-                            fill: '#8b4513', 
-                            fontSize: '10px', 
-                            fontWeight: 'bold',
-                            textAnchor: 'middle'
-                          }}
-                        />
-                      </ReferenceLine>
-                    );
-                  })}
+                    const eventTimestamp = new Date(event.date).getTime();
+                    const chartStartTime = hourlyData.length > 0 ? new Date(hourlyData[0].time).getTime() : 0;
+                    const chartEndTime = hourlyData.length > 0 ? new Date(hourlyData[hourlyData.length - 1].time).getTime() : 0;
+                    
+                    console.log(`Event ${event.id}: date=${event.date}, timestamp=${eventTimestamp}, chartRange=${chartStartTime}-${chartEndTime}`);
+                    
+                    // Only show events within chart time range (with some buffer)
+                    if (eventTimestamp >= chartStartTime - (3600000 * 2) && eventTimestamp <= chartEndTime + (3600000 * 2)) {
+                      return (
+                        <ReferenceLine
+                          key={event.id}
+                          x={event.date}
+                          stroke="#8b4513"
+                          strokeWidth={3}
+                          opacity={0.8}
+                        >
+                          <Label 
+                            value={event.title} 
+                            position="top" 
+                            offset={5}
+                            style={{ 
+                              fill: '#8b4513', 
+                              fontSize: '10px', 
+                              fontWeight: 'bold',
+                              textAnchor: 'middle'
+                            }}
+                          />
+                        </ReferenceLine>
+                      );
+                    }
+                    return null;
+                  }).filter(Boolean)}
                   
                   <Line 
                     yAxisId="sentiment"
