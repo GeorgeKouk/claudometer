@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Label } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Label, Legend } from 'recharts';
 import Reevaluation from './Reevaluation';
 import Footer from './components/Footer';
 import Contact from './pages/Contact';
@@ -76,16 +76,9 @@ const Claudometer = () => {
       setAvgPostCount(currentData.avg_post_count || 0);
       setAvgCommentCount(currentData.avg_comment_count || 0);
       
-      // Handle new hourly data structure
-      if (hourlyDataRaw && typeof hourlyDataRaw === 'object' && hourlyDataRaw.data) {
-        // New structure: { data: [...], events: [...] }
-        setHourlyData(hourlyDataRaw.data || []);
-        setEvents(hourlyDataRaw.events || []);
-      } else {
-        // Backward compatibility: old structure was just an array
-        setHourlyData(hourlyDataRaw || []);
-        setEvents([]);
-      }
+      // Handle new hourly data structure: { data: [...], events: [...] }
+      setHourlyData(hourlyDataRaw.data || []);
+      setEvents(hourlyDataRaw.events || []);
       
       // Store raw data for filtering (sort posts by most recent first)
       const sortedPosts = (postsDataRaw || []).sort((a: any, b: any) => {
@@ -393,27 +386,17 @@ const Claudometer = () => {
                     }}
                   />
                   <YAxis 
-                    yAxisId="sentiment"
                     domain={[0, 1]} 
                     tickFormatter={(value) => (value * 100).toFixed(0) + '%'}
                     tick={{ fill: '#9f6841', fontSize: 12 }}
                     axisLine={{ stroke: '#ead1bf' }}
-                    label={{ value: 'Sentiment', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#9f6841' } }}
-                  />
-                  <YAxis 
-                    yAxisId="posts"
-                    orientation="right"
-                    domain={[0, 'dataMax']}
-                    tick={{ fill: '#A0522D', fontSize: 12 }}
-                    axisLine={{ stroke: '#A0522D' }}
-                    label={{ value: 'Post Count', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: '#A0522D' } }}
                   />
                   <Tooltip 
                     formatter={(value, name) => {
-                      if (name === 'sentiment') {
+                      if (name === 'Sentiment') {
                         return [(Number(value) * 100).toFixed(1) + '%', 'Sentiment'];
-                      } else if (name === 'post_count') {
-                        return [value + ' posts', 'Posts'];
+                      } else if (name === 'Post Count') {
+                        return [value + ' posts', 'Post Count'];
                       }
                       return [value, name];
                     }}
@@ -425,53 +408,44 @@ const Claudometer = () => {
                       boxShadow: '0 10px 25px rgba(139, 69, 19, 0.1)'
                     }}
                   />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="line"
+                  />
                   
                   {/* Event annotations as reference lines */}
-                  {events.map((event) => {
-                    const getEventColor = (type: string) => {
-                      switch (type) {
-                        case 'feature': return '#3b82f6'; // blue
-                        case 'pricing': return '#ef4444'; // red
-                        case 'incident': return '#f97316'; // orange
-                        case 'announcement':
-                        default: return '#22c55e'; // green
-                      }
-                    };
-                    
-                    return (
-                      <ReferenceLine
-                        key={event.id}
-                        x={event.date}
-                        stroke={getEventColor(event.type)}
-                        strokeDasharray="2 2"
-                        strokeWidth={2}
-                      >
-                        <Label 
-                          value={event.title} 
-                          position="top" 
-                          offset={10}
-                          style={{ 
-                            fill: getEventColor(event.type), 
-                            fontSize: '11px', 
-                            fontWeight: 'bold',
-                            textAnchor: 'middle'
-                          }}
-                        />
-                      </ReferenceLine>
-                    );
-                  })}
+                  {events.map((event) => (
+                    <ReferenceLine
+                      key={event.id}
+                      x={event.date}
+                      stroke="#8b4513"
+                      strokeDasharray="2 2"
+                      strokeWidth={2}
+                    >
+                      <Label 
+                        value={event.title} 
+                        position="top" 
+                        offset={10}
+                        style={{ 
+                          fill: '#8b4513', 
+                          fontSize: '11px', 
+                          fontWeight: 'bold',
+                          textAnchor: 'middle'
+                        }}
+                      />
+                    </ReferenceLine>
+                  ))}
                   
                   <Line 
-                    yAxisId="sentiment"
                     type="monotone" 
                     dataKey="sentiment" 
                     stroke="#d4a37f" 
                     strokeWidth={3}
                     dot={{ fill: '#d4a37f', strokeWidth: 2, r: 5 }}
                     activeDot={{ r: 7, stroke: '#d4a37f', strokeWidth: 2, fill: '#ffffff' }}
+                    name="Sentiment"
                   />
                   <Line 
-                    yAxisId="posts"
                     type="monotone" 
                     dataKey="post_count" 
                     stroke="#A0522D" 
@@ -479,6 +453,7 @@ const Claudometer = () => {
                     strokeDasharray="5 5"
                     dot={false}
                     opacity={0.6}
+                    name="Post Count"
                   />
                 </LineChart>
               </ResponsiveContainer>

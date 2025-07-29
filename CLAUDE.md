@@ -46,12 +46,21 @@ Claudometer/
 ### API Endpoints (All Public Endpoints Cached for 55 Minutes)
 - `GET /` - Health check
 - `GET /current-sentiment` - Latest sentiment data (cached by period parameter)
-- `GET /hourly-data` - 24-hour trend data (cached by period parameter)
+- `GET /hourly-data` - 24-hour trend data (cached by period parameter) - **NEW FORMAT**: `{data: [...], events: [...]}`
 - `GET /topics` - Topic breakdown (cached by period parameter)
 - `GET /keywords` - Trending keywords (cached by period parameter)
 - `GET /recent-posts` - Recent posts feed (cached by period parameter)
 - `GET /collect-data` - Manual data collection trigger (REMOVED for security - only accessible via cron)
-- `GET /dev/*` - Development endpoints (DEV_MODE_ENABLED=true required)
+
+### Development Endpoints (DEV_MODE_ENABLED=true required)
+- `GET /dev/events-admin` - HTML interface for event management
+- `GET /dev/events` - List all events
+- `POST /dev/events` - Create new event
+- `DELETE /dev/events/:id` - Delete event
+- `GET /dev/clear-cache` - **CRITICAL**: Clear all cache for immediate testing
+- `GET /dev/posts` - Debug posts data
+- `POST /dev/reevaluate` - Re-analyze sentiment
+- `POST /dev/rollback` - Rollback sentiment changes
 
 ### Cron Schedule
 - **Frequency**: Every hour (`0 * * * *`)
@@ -101,6 +110,7 @@ npx wrangler d1 execute claudometer-db --remote --command "PRAGMA table_info(tab
 - `comments` - Reddit comments with sentiment analysis  
 - `sentiment_hourly` - Hourly aggregated sentiment data
 - `topics` - Topic definitions with colors (used by API endpoints)
+- `events` - Event annotations for chart (id, title, description, event_date, event_type, url, created_at)
 
 **System Tables:**
 - `_cf_METADATA` - Cloudflare internal metadata
@@ -168,6 +178,18 @@ npx wrangler kv namespace create CLAUDOMETER_CACHE --preview
 - **Caching Strategy**: KV cache-first approach with 55-minute TTL and automatic invalidation
 - **Performance**: ~95% faster responses when cache is warm, <1 second dashboard loads
 
+### CRITICAL: Cache Management for Development
+- **Cache TTL**: 55 minutes - API changes may not be visible immediately
+- **Testing New Features**: ALWAYS clear cache first using `/dev/clear-cache` endpoint
+- **Dev Mode Required**: Set `DEV_MODE_ENABLED = "true"` in `wrangler.toml` for cache clearing
+- **Cache Keys**: Format `claudometer:endpoint:param=value`
+- **Cache Invalidation**: Automatic after hourly cron jobs, manual via dev endpoint
+
+### API Response Structure
+- **Current Format**: `{data: [{time, sentiment, post_count, comment_count, posts}], events: [...]}`
+- **Data Fields**: `posts` = combined count, `post_count`/`comment_count` = separate counts
+- **Events**: Array of event objects with `{id, title, description, date, type, url}`
+
 ### Data Collection Logic
 - Fetch 20 posts + 5 top comments per subreddit (3 subreddits total)
 - Analyze 10 posts + 15 comments with OpenAI (cost control)
@@ -182,6 +204,22 @@ npx wrangler kv namespace create CLAUDOMETER_CACHE --preview
 - **Worker Errors**: Verify all secrets are set in Cloudflare dashboard
 - **Database Issues**: Ensure D1 database is created and bound correctly
 - **API Failures**: Check Reddit API credentials and rate limits
+- **Cache Issues**: API changes not visible? Clear cache using `/dev/clear-cache` endpoint
+
+### Essential Development Commands
+```bash
+# Clear cache for immediate testing (DEV_MODE_ENABLED=true required)
+curl "https://api.claudometer.app/dev/clear-cache"
+
+# Check new API structure  
+curl "https://api.claudometer.app/hourly-data?period=24h" | jq .
+
+# Access events admin interface
+open "https://api.claudometer.app/dev/events-admin"
+
+# Query events directly
+npx wrangler d1 execute claudometer-db --remote --command "SELECT * FROM events ORDER BY event_date DESC LIMIT 5;"
+```
 
 ### Monitoring
 - **Worker Logs**: Available in Cloudflare dashboard
