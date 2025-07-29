@@ -45,6 +45,23 @@ export default {
         return await reevaluateSentiments(request, env);
       } else if (path === '/dev/rollback' && env.DEV_MODE_ENABLED === 'true') {
         return await rollbackSentiments(request, env);
+      } else if (path === '/dev/events-admin' && env.DEV_MODE_ENABLED === 'true') {
+        return await getEventsAdmin(env);
+      } else if (path === '/dev/events' && env.DEV_MODE_ENABLED === 'true') {
+        if (request.method === 'GET') {
+          return await getDevEvents(env);
+        } else if (request.method === 'POST') {
+          return await createEvent(request, env);
+        }
+      } else if (path.startsWith('/dev/events/') && env.DEV_MODE_ENABLED === 'true') {
+        const eventId = path.split('/')[3];
+        if (request.method === 'PUT') {
+          return await updateEvent(request, env, eventId);
+        } else if (request.method === 'DELETE') {
+          return await deleteEvent(env, eventId);
+        }
+      } else if (path === '/dev/clear-cache' && env.DEV_MODE_ENABLED === 'true') {
+        return await clearCache(env);
       } else if (path === '/') {
         return new Response('Claudometer API is running!', { headers: corsHeaders });
       }
@@ -184,18 +201,44 @@ async function getHourlyDataUncached(env) {
     `);
     const results = await stmt.bind(twentyFourHoursAgo).all();
     
+    // Get events for the last 24 hours
+    const eventsStmt = env.DB.prepare(`
+      SELECT id, title, description, event_date, event_type, url
+      FROM events 
+      WHERE event_date >= ?
+      ORDER BY event_date ASC
+    `);
+    const eventsResults = await eventsStmt.bind(twentyFourHoursAgo).all();
+    
     // Transform database results to expected format (keep original order from query)
     const hourlyData = results.results.map(row => ({
       time: row.hour, // Use database timestamp as-is
       sentiment: row.weighted_sentiment || 0.5,
-      posts: (row.post_count || 0) + (row.comment_count || 0)
+      post_count: row.post_count || 0,
+      comment_count: row.comment_count || 0,
+      posts: (row.post_count || 0) + (row.comment_count || 0) // Combined for backward compatibility
     }));
     
+    // Transform events data
+    const events = eventsResults.results.map(row => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      date: row.event_date,
+      type: row.event_type,
+      url: row.url
+    }));
     
-    return hourlyData;
+    return {
+      data: hourlyData,
+      events: events
+    };
   } catch (error) {
     console.error('Error in getHourlyDataUncached:', error);
-    return [];
+    return {
+      data: [],
+      events: []
+    };
   }
 }
 
@@ -218,15 +261,42 @@ async function getDailyAggregatedDataUncached(env, period) {
     
     const results = await stmt.all();
     
+    // Get events for the selected period
+    const eventsStmt = env.DB.prepare(`
+      SELECT id, title, description, event_date, event_type, url
+      FROM events 
+      WHERE event_date >= datetime('now', '-${daysBack} days')
+      ORDER BY event_date ASC
+    `);
+    const eventsResults = await eventsStmt.all();
+    
     const dailyData = results.results.map(row => ({
       time: row.date + 'T12:00:00Z', // Use noon for daily data points
       sentiment: row.sentiment || 0.5,
-      posts: row.total_posts || 0
+      post_count: row.post_count || 0,
+      comment_count: row.comment_count || 0,
+      posts: row.total_posts || 0 // Combined for backward compatibility
     })).reverse(); // Frontend expects chronological order
     
-    return dailyData;
+    // Transform events data
+    const events = eventsResults.results.map(row => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      date: row.event_date,
+      type: row.event_type,
+      url: row.url
+    }));
+    
+    return {
+      data: dailyData,
+      events: events
+    };
   } catch (error) {
-    return [];
+    return {
+      data: [],
+      events: []
+    };
   }
 }
 
@@ -1357,6 +1427,271 @@ async function rollbackSentiments(request, env) {
 function getTruncatedText(title, content) {
   const text = `${title || ''} ${content || ''}`.trim();
   return text.length > 500 ? text.substring(0, 500) + '...' : text;
+}
+
+// EVENT MANAGEMENT FUNCTIONS
+
+async function getEventsAdmin(env) {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Claudometer Events Admin</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #8b4513; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #723a0f; }
+        .event-item { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .event-actions { margin-top: 10px; }
+        .event-actions button { margin-right: 10px; }
+        .delete-btn { background: #dc3545; }
+        .delete-btn:hover { background: #c82333; }
+    </style>
+</head>
+<body>
+    <h1>Claudometer Events Admin</h1>
+    
+    <h2>Add New Event</h2>
+    <form id="eventForm">
+        <div class="form-group">
+            <label for="title">Title (required):</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+        <div class="form-group">
+            <label for="description">Description:</label>
+            <textarea id="description" name="description" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="event_date">Date & Time (required):</label>
+            <input type="datetime-local" id="event_date" name="event_date" required>
+        </div>
+        <div class="form-group">
+            <label for="event_type">Type:</label>
+            <select id="event_type" name="event_type">
+                <option value="announcement">Announcement</option>
+                <option value="feature">Feature</option>
+                <option value="pricing">Pricing</option>
+                <option value="incident">Incident</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="url">URL (optional):</label>
+            <input type="url" id="url" name="url">
+        </div>
+        <button type="submit">Add Event</button>
+    </form>
+    
+    <h2>Existing Events</h2>
+    <div id="eventsList"></div>
+    
+    <script>
+        // Load existing events
+        async function loadEvents() {
+            const response = await fetch('/dev/events');
+            const events = await response.json();
+            const container = document.getElementById('eventsList');
+            
+            if (events.length === 0) {
+                container.innerHTML = '<p>No events found.</p>';
+                return;
+            }
+            
+            container.innerHTML = events.map(event => \`
+                <div class="event-item">
+                    <h3>\${event.title}</h3>
+                    <p><strong>Date:</strong> \${new Date(event.date).toLocaleString()}</p>
+                    <p><strong>Type:</strong> \${event.type}</p>
+                    \${event.description ? \`<p><strong>Description:</strong> \${event.description}</p>\` : ''}
+                    \${event.url ? \`<p><strong>URL:</strong> <a href="\${event.url}" target="_blank">\${event.url}</a></p>\` : ''}
+                    <div class="event-actions">
+                        <button onclick="deleteEvent(\${event.id})" class="delete-btn">Delete</button>
+                    </div>
+                </div>
+            \`).join('');
+        }
+        
+        // Add new event
+        document.getElementById('eventForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            // Convert datetime-local to ISO string
+            data.event_date = new Date(data.event_date).toISOString();
+            
+            const response = await fetch('/dev/events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            if (response.ok) {
+                alert('Event added successfully!');
+                e.target.reset();
+                loadEvents();
+            } else {
+                alert('Error adding event');
+            }
+        });
+        
+        // Delete event
+        async function deleteEvent(id) {
+            if (confirm('Are you sure you want to delete this event?')) {
+                const response = await fetch(\`/dev/events/\${id}\`, { method: 'DELETE' });
+                if (response.ok) {
+                    alert('Event deleted successfully!');
+                    loadEvents();
+                } else {
+                    alert('Error deleting event');
+                }
+            }
+        }
+        
+        // Load events on page load
+        loadEvents();
+    </script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html', ...getCorsHeaders() }
+  });
+}
+
+async function getDevEvents(env) {
+  try {
+    const stmt = env.DB.prepare('SELECT * FROM events ORDER BY event_date DESC');
+    const results = await stmt.all();
+    
+    const events = results.results.map(row => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      date: row.event_date,
+      type: row.event_type,
+      url: row.url,
+      created_at: row.created_at
+    }));
+    
+    return new Response(JSON.stringify(events), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+async function createEvent(request, env) {
+  try {
+    const { title, description, event_date, event_type, url } = await request.json();
+    
+    if (!title || !event_date) {
+      return new Response(JSON.stringify({ error: 'Title and event_date are required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    const stmt = env.DB.prepare(`
+      INSERT INTO events (title, description, event_date, event_type, url)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    await stmt.bind(
+      title,
+      description || null,
+      event_date,
+      event_type || 'announcement',
+      url || null
+    ).run();
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+async function updateEvent(request, env, eventId) {
+  try {
+    const { title, description, event_date, event_type, url } = await request.json();
+    
+    if (!title || !event_date) {
+      return new Response(JSON.stringify({ error: 'Title and event_date are required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      });
+    }
+    
+    const stmt = env.DB.prepare(`
+      UPDATE events 
+      SET title = ?, description = ?, event_date = ?, event_type = ?, url = ?
+      WHERE id = ?
+    `);
+    
+    await stmt.bind(
+      title,
+      description || null,
+      event_date,
+      event_type || 'announcement',
+      url || null,
+      eventId
+    ).run();
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+async function deleteEvent(env, eventId) {
+  try {
+    const stmt = env.DB.prepare('DELETE FROM events WHERE id = ?');
+    await stmt.bind(eventId).run();
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
+}
+
+async function clearCache(env) {
+  try {
+    // Clear all claudometer cache entries
+    await clearCachePattern('', env);
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: 'All cache entries cleared successfully' 
+    }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+    });
+  }
 }
 
 // CACHE HELPER FUNCTIONS
