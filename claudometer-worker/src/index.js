@@ -201,11 +201,11 @@ async function getHourlyDataUncached(env) {
     `);
     const results = await stmt.bind(twentyFourHoursAgo).all();
     
-    // Get events for the last 24 hours
+    // Get events for the last 24 hours (with some buffer for timezone issues)
     const eventsStmt = env.DB.prepare(`
       SELECT id, title, description, event_date, event_type, url
       FROM events 
-      WHERE event_date >= ?
+      WHERE event_date >= datetime(?, '-2 hours') AND event_date <= datetime('now', '+2 hours')
       ORDER BY event_date ASC
     `);
     const eventsResults = await eventsStmt.bind(twentyFourHoursAgo).all();
@@ -261,11 +261,12 @@ async function getDailyAggregatedDataUncached(env, period) {
     
     const results = await stmt.all();
     
-    // Get events for the selected period
+    // Get events for the selected period (with timezone buffer)
     const eventsStmt = env.DB.prepare(`
       SELECT id, title, description, event_date, event_type, url
       FROM events 
-      WHERE event_date >= datetime('now', '-${daysBack} days')
+      WHERE event_date >= datetime('now', '-${daysBack} days', '-2 hours') 
+        AND event_date <= datetime('now', '+2 hours')
       ORDER BY event_date ASC
     `);
     const eventsResults = await eventsStmt.all();

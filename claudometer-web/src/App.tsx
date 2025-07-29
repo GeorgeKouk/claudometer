@@ -79,6 +79,7 @@ const Claudometer = () => {
       // Handle new hourly data structure: { data: [...], events: [...] }
       setHourlyData(hourlyDataRaw.data || []);
       setEvents(hourlyDataRaw.events || []);
+      console.log('Events loaded:', hourlyDataRaw.events);
       
       // Store raw data for filtering (sort posts by most recent first)
       const sortedPosts = (postsDataRaw || []).sort((a: any, b: any) => {
@@ -357,6 +358,7 @@ const Claudometer = () => {
             }}>
               <h3 className="text-xl font-semibold mb-6" style={{ color: '#8b4513' }}>
                 Sentiment Trend ({timeframe === '24h' ? '24h' : timeframe === '7d' ? '7 days' : timeframe === '30d' ? '30 days' : 'All Time'})
+                {events.length > 0 && <span className="text-sm ml-2">({events.length} events)</span>}
               </h3>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={hourlyData}>
@@ -420,24 +422,33 @@ const Claudometer = () => {
                     iconType="line"
                   />
                   
+                  {/* Test reference line - should always show */}
+                  <ReferenceLine
+                    x={hourlyData[Math.floor(hourlyData.length / 2)]?.time}
+                    stroke="#ff0000"
+                    strokeWidth={2}
+                  >
+                    <Label value="TEST LINE" position="top" />
+                  </ReferenceLine>
+                  
                   {/* Event annotations as reference lines */}
                   {events.map((event) => (
                     <ReferenceLine
                       key={event.id}
                       x={event.date}
                       stroke="#8b4513"
-                      strokeDasharray="2 2"
-                      strokeWidth={2}
+                      strokeWidth={3}
+                      opacity={0.8}
                     >
                       <Label 
                         value={event.title} 
-                        position="top" 
-                        offset={10}
+                        position="topLeft" 
+                        offset={5}
                         style={{ 
                           fill: '#8b4513', 
-                          fontSize: '11px', 
+                          fontSize: '10px', 
                           fontWeight: 'bold',
-                          textAnchor: 'middle'
+                          textAnchor: 'start'
                         }}
                       />
                     </ReferenceLine>
