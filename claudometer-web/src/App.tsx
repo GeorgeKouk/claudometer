@@ -493,7 +493,7 @@ const Claudometer = () => {
                           <circle 
                             cx={cx} 
                             cy={cy} 
-                            r={4} 
+                            r={6} 
                             fill="#d4a37f" 
                             stroke="#fff" 
                             strokeWidth={2}
