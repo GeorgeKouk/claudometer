@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import Reevaluation from './Reevaluation';
 import Footer from './components/Footer';
 import Contact from './pages/Contact';
@@ -430,18 +430,6 @@ const Claudometer = () => {
                     iconType="line"
                   />
                   
-                  {/* Event annotations - now merged into data points */}
-                  {hourlyData.map((dataPoint) => 
-                    dataPoint.events?.map((event: any) => (
-                      <ReferenceLine
-                        key={event.id}
-                        x={dataPoint.time}
-                        stroke="#8b4513"
-                        strokeWidth={2}
-                        strokeDasharray="4 4"
-                      />
-                    ))
-                  ).flat().filter(Boolean)}
                   
                   <Line 
                     yAxisId="posts"
@@ -460,7 +448,48 @@ const Claudometer = () => {
                     dataKey="sentiment" 
                     stroke="#d4a37f" 
                     strokeWidth={3}
-                    dot={{ fill: '#d4a37f', strokeWidth: 2, r: 3 }}
+                    dot={(props) => {
+                      const { cx, cy, payload } = props;
+                      return (
+                        <g>
+                          {/* Event vertical lines - only renders if events exist */}
+                          {payload?.events && payload.events.map((event: any, index: number) => (
+                            <g key={event.id}>
+                              {/* Vertical dashed line */}
+                              <line 
+                                x1={cx} 
+                                y1={20}    // Top of chart
+                                x2={cx} 
+                                y2={260}   // Bottom of chart  
+                                stroke="#8b4513" 
+                                strokeWidth={2} 
+                                strokeDasharray="4 4"
+                              />
+                              {/* Event label at top */}
+                              <text
+                                x={cx}
+                                y={15}
+                                textAnchor="middle"
+                                fontSize="10"
+                                fill="#8b4513"
+                                fontWeight="bold"
+                              >
+                                {event.title}
+                              </text>
+                            </g>
+                          ))}
+                          {/* Regular sentiment dot */}
+                          <circle 
+                            cx={cx} 
+                            cy={cy} 
+                            r={3} 
+                            fill="#d4a37f" 
+                            stroke="#fff" 
+                            strokeWidth={2}
+                          />
+                        </g>
+                      );
+                    }}
                     activeDot={{ r: 5, stroke: '#d4a37f', strokeWidth: 2, fill: '#ffffff' }}
                     name="Sentiment"
                   />
