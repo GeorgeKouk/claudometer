@@ -220,25 +220,38 @@ async function getHourlyDataUncached(env) {
       url: row.url
     }));
     
-    // Transform database results and merge events into closest time points
-    const hourlyData = results.results.map(row => {
-      const dataPointTime = new Date(row.hour).getTime();
+    // Transform database results and assign each event to its closest time point
+    const hourlyData = results.results.map(row => ({
+      time: row.hour,
+      sentiment: row.weighted_sentiment || 0.5,
+      post_count: row.post_count || 0,
+      comment_count: row.comment_count || 0,
+      posts: (row.post_count || 0) + (row.comment_count || 0),
+      events: [] // Initialize empty, will be populated below
+    }));
+    
+    // Assign each event to its closest data point (avoid duplicates)
+    events.forEach(event => {
+      const eventTime = new Date(event.date).getTime();
+      let closestDataPoint = hourlyData[0];
+      let minDiff = Math.abs(new Date(hourlyData[0].time).getTime() - eventTime);
       
-      // Find events within 2 hours of this data point
-      const nearbyEvents = events.filter(event => {
-        const eventTime = new Date(event.date).getTime();
-        const timeDiff = Math.abs(eventTime - dataPointTime);
-        return timeDiff <= (2 * 60 * 60 * 1000); // 2 hours in milliseconds
+      hourlyData.forEach(dataPoint => {
+        const diff = Math.abs(new Date(dataPoint.time).getTime() - eventTime);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestDataPoint = dataPoint;
+        }
       });
       
-      return {
-        time: row.hour,
-        sentiment: row.weighted_sentiment || 0.5,
-        post_count: row.post_count || 0,
-        comment_count: row.comment_count || 0,
-        posts: (row.post_count || 0) + (row.comment_count || 0),
-        events: nearbyEvents.length > 0 ? nearbyEvents : undefined // Only include if events exist
-      };
+      closestDataPoint.events.push(event);
+    });
+    
+    // Clean up empty events arrays
+    hourlyData.forEach(dataPoint => {
+      if (dataPoint.events.length === 0) {
+        dataPoint.events = undefined;
+      }
     });
     
     return hourlyData;

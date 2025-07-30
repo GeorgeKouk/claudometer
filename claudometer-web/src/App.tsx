@@ -460,7 +460,7 @@ const Claudometer = () => {
                                 x1={cx} 
                                 y1={20}    // Top of chart
                                 x2={cx} 
-                                y2={260}   // Bottom of chart  
+                                y2={240}   // Bottom of chart area (before X-axis)
                                 stroke="#8b4513" 
                                 strokeWidth={2} 
                                 strokeDasharray="4 4"
@@ -482,7 +482,7 @@ const Claudometer = () => {
                           <circle 
                             cx={cx} 
                             cy={cy} 
-                            r={3} 
+                            r={4} 
                             fill="#d4a37f" 
                             stroke="#fff" 
                             strokeWidth={2}
