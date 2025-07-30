@@ -458,9 +458,9 @@ const Claudometer = () => {
                               {/* Vertical dashed line */}
                               <line 
                                 x1={cx} 
-                                y1={cy - 30}    // Start above the dot
+                                y1={cy - (50 + payload.sentiment * 30)}    // Longer above for higher sentiment
                                 x2={cx} 
-                                y2={cy + 30}    // End below the dot
+                                y2={cy + (50 + (1 - payload.sentiment) * 30)}    // Longer below for lower sentiment
                                 stroke="#8b4513" 
                                 strokeWidth={2} 
                                 strokeDasharray="4 4"
