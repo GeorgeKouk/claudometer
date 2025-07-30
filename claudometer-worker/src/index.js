@@ -210,15 +210,6 @@ async function getHourlyDataUncached(env) {
     `);
     const eventsResults = await eventsStmt.bind(twentyFourHoursAgo).all();
     
-    // Transform database results to expected format (keep original order from query)
-    const hourlyData = results.results.map(row => ({
-      time: row.hour, // Use database timestamp as-is
-      sentiment: row.weighted_sentiment || 0.5,
-      post_count: row.post_count || 0,
-      comment_count: row.comment_count || 0,
-      posts: (row.post_count || 0) + (row.comment_count || 0) // Combined for backward compatibility
-    }));
-    
     // Transform events data
     const events = eventsResults.results.map(row => ({
       id: row.id,
@@ -229,16 +220,31 @@ async function getHourlyDataUncached(env) {
       url: row.url
     }));
     
-    return {
-      data: hourlyData,
-      events: events
-    };
+    // Transform database results and merge events into closest time points
+    const hourlyData = results.results.map(row => {
+      const dataPointTime = new Date(row.hour).getTime();
+      
+      // Find events within 2 hours of this data point
+      const nearbyEvents = events.filter(event => {
+        const eventTime = new Date(event.date).getTime();
+        const timeDiff = Math.abs(eventTime - dataPointTime);
+        return timeDiff <= (2 * 60 * 60 * 1000); // 2 hours in milliseconds
+      });
+      
+      return {
+        time: row.hour,
+        sentiment: row.weighted_sentiment || 0.5,
+        post_count: row.post_count || 0,
+        comment_count: row.comment_count || 0,
+        posts: (row.post_count || 0) + (row.comment_count || 0),
+        events: nearbyEvents.length > 0 ? nearbyEvents : undefined // Only include if events exist
+      };
+    });
+    
+    return hourlyData;
   } catch (error) {
     console.error('Error in getHourlyDataUncached:', error);
-    return {
-      data: [],
-      events: []
-    };
+    return [];
   }
 }
 
@@ -271,14 +277,6 @@ async function getDailyAggregatedDataUncached(env, period) {
     `);
     const eventsResults = await eventsStmt.all();
     
-    const dailyData = results.results.map(row => ({
-      time: row.date + 'T12:00:00Z', // Use noon for daily data points
-      sentiment: row.sentiment || 0.5,
-      post_count: row.post_count || 0,
-      comment_count: row.comment_count || 0,
-      posts: row.total_posts || 0 // Combined for backward compatibility
-    })).reverse(); // Frontend expects chronological order
-    
     // Transform events data
     const events = eventsResults.results.map(row => ({
       id: row.id,
@@ -289,15 +287,30 @@ async function getDailyAggregatedDataUncached(env, period) {
       url: row.url
     }));
     
-    return {
-      data: dailyData,
-      events: events
-    };
+    // Transform database results and merge events into closest time points
+    const dailyData = results.results.map(row => {
+      const dataPointTime = new Date(row.date + 'T12:00:00Z').getTime(); // Use noon for daily data points
+      
+      // Find events within 12 hours of this data point (half day for daily data)
+      const nearbyEvents = events.filter(event => {
+        const eventTime = new Date(event.date).getTime();
+        const timeDiff = Math.abs(eventTime - dataPointTime);
+        return timeDiff <= (12 * 60 * 60 * 1000); // 12 hours in milliseconds
+      });
+      
+      return {
+        time: row.date + 'T12:00:00Z',
+        sentiment: row.sentiment || 0.5,
+        post_count: row.post_count || 0,
+        comment_count: row.comment_count || 0,
+        posts: row.total_posts || 0,
+        events: nearbyEvents.length > 0 ? nearbyEvents : undefined
+      };
+    }).reverse(); // Frontend expects chronological order
+    
+    return dailyData;
   } catch (error) {
-    return {
-      data: [],
-      events: []
-    };
+    return [];
   }
 }
 

@@ -76,9 +76,9 @@ const Claudometer = () => {
       setAvgPostCount(currentData.avg_post_count || 0);
       setAvgCommentCount(currentData.avg_comment_count || 0);
       
-      // Handle new hourly data structure: { data: [...], events: [...] }
-      setHourlyData(hourlyDataRaw.data || []);
-      setEvents(hourlyDataRaw.events || []);
+      // Handle new simple data structure: just array with events merged in
+      setHourlyData(hourlyDataRaw || []);
+      setEvents([]); // No longer needed - events are in hourlyData
       
       // Store raw data for filtering (sort posts by most recent first)
       const sortedPosts = (postsDataRaw || []).sort((a: any, b: any) => {
@@ -430,15 +430,18 @@ const Claudometer = () => {
                     iconType="line"
                   />
                   
-                  {/* Event annotations as ReferenceLine at exact event timestamps */}
-                  {events.map((event) => (
-                    <ReferenceLine
-                      key={event.id}
-                      x={event.date}
-                      stroke="#ff0000"
-                      strokeWidth={3}
-                    />
-                  ))}
+                  {/* Event annotations - now merged into data points */}
+                  {hourlyData.map((dataPoint) => 
+                    dataPoint.events?.map((event: any) => (
+                      <ReferenceLine
+                        key={event.id}
+                        x={dataPoint.time}
+                        stroke="#8b4513"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                      />
+                    ))
+                  ).flat().filter(Boolean)}
                   
                   <Line 
                     yAxisId="posts"
