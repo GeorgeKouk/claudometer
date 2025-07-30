@@ -352,7 +352,7 @@ const Claudometer = () => {
 
           {/* Trend Chart */}
           <div className="lg:col-span-2">
-            <div className="rounded-2xl shadow-lg border p-4 sm:p-8 h-auto" style={{ 
+            <div className="rounded-2xl shadow-lg border p-4 sm:py-8 sm:pr-8 sm:pl-4 h-auto" style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.85)',
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
@@ -493,7 +493,7 @@ const Claudometer = () => {
                           <circle 
                             cx={cx} 
                             cy={cy} 
-                            r={6} 
+                            r={5} 
                             fill="#d4a37f" 
                             stroke="#fff" 
                             strokeWidth={2}
