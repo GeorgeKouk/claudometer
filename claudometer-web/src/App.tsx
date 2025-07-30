@@ -458,9 +458,9 @@ const Claudometer = () => {
                               {/* Vertical dashed line */}
                               <line 
                                 x1={cx} 
-                                y1={20}    // Top of chart
+                                y1={cy - 30}    // Start above the dot
                                 x2={cx} 
-                                y2={240}   // Bottom of chart area (before X-axis)
+                                y2={cy + 30}    // End below the dot
                                 stroke="#8b4513" 
                                 strokeWidth={2} 
                                 strokeDasharray="4 4"
