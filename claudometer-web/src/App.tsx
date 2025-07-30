@@ -460,7 +460,7 @@ const Claudometer = () => {
                                 x1={cx} 
                                 y1={cy}     // Start at sentiment dot
                                 x2={cx} 
-                                y2={25}     // End just below event label
+                                y2={8}      // End at top of rectangle
                                 stroke="#8b4513" 
                                 strokeWidth={2} 
                                 strokeDasharray="4 4"
@@ -473,10 +473,7 @@ const Claudometer = () => {
                                 height={14}
                                 rx={3}
                                 ry={3}
-                                fill="#A0522D"
-                                fillOpacity={0.6}
-                                stroke="#A0522D"
-                                strokeWidth={1}
+                                fill="#8b4513"
                               />
                               {/* Event label text */}
                               <text
