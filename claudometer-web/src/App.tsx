@@ -24,6 +24,7 @@ const Claudometer = () => {
   const [error, setError] = useState<string | null>(null);
   const [nextRefresh, setNextRefresh] = useState<Date | null>(null);
   const [showAllTopics, setShowAllTopics] = useState<boolean>(false);
+  const [showAllKeywords, setShowAllKeywords] = useState<boolean>(false);
 
   // Store raw data for filtering
 
@@ -596,7 +597,7 @@ const Claudometer = () => {
               Color and tag show sentiment toward that keyword.
             </p>
             <div className="space-y-4">
-              {keywordData.map((item, index) => {
+              {keywordData.slice(0, showAllKeywords ? keywordData.length : 10).map((item, index) => {
                 const maxCount = Math.max(...keywordData.map(k => k.count));
                 return (
                   <div key={item.keyword} className="flex items-center justify-between">
@@ -630,6 +631,15 @@ const Claudometer = () => {
                   </div>
                 );
               })}
+              {keywordData.length > 10 && (
+                <button
+                  onClick={() => setShowAllKeywords(!showAllKeywords)}
+                  className="text-xs font-medium mt-2 hover:underline transition-all duration-200"
+                  style={{ color: '#8b4513' }}
+                >
+                  {showAllKeywords ? `Show less` : `Show all ${keywordData.length} keywords`}
+                </button>
+              )}
             </div>
           </div>
         </div>
