@@ -458,20 +458,33 @@ const Claudometer = () => {
                               {/* Vertical dashed line */}
                               <line 
                                 x1={cx} 
-                                y1={cy - (50 + payload.sentiment * 30)}    // Longer above for higher sentiment
+                                y1={cy}     // Start at sentiment dot
                                 x2={cx} 
-                                y2={cy + (50 + (1 - payload.sentiment) * 30)}    // Longer below for lower sentiment
+                                y2={25}     // End just below event label
                                 stroke="#8b4513" 
                                 strokeWidth={2} 
                                 strokeDasharray="4 4"
                               />
-                              {/* Event label at top */}
+                              {/* Event label background */}
+                              <rect
+                                x={cx - (event.title.length * 3)}
+                                y={8}
+                                width={event.title.length * 6}
+                                height={14}
+                                rx={3}
+                                ry={3}
+                                fill="#A0522D"
+                                fillOpacity={0.6}
+                                stroke="#A0522D"
+                                strokeWidth={1}
+                              />
+                              {/* Event label text */}
                               <text
                                 x={cx}
-                                y={15}
+                                y={18}
                                 textAnchor="middle"
                                 fontSize="10"
-                                fill="#8b4513"
+                                fill="#fff"
                                 fontWeight="bold"
                               >
                                 {event.title}
