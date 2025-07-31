@@ -425,13 +425,42 @@ const Claudometer = () => {
                     hide={true}
                   />
                   <Tooltip 
-                    formatter={(value, name) => {
+                    formatter={(value, name, props) => {
                       if (name === 'Sentiment') {
                         return [(Number(value) * 100).toFixed(1) + '%', 'Sentiment'];
                       } else if (name === 'Post Count') {
                         return [value + ' posts', 'Post Count'];
                       }
                       return [value, name];
+                    }}
+                    labelFormatter={(label) => {
+                      try {
+                        // Parse date and format nicely
+                        const date = new Date(label);
+                        // Format: "Dec 31, 2024 at 2:30 PM" or "Dec 31 at 2:30 PM" for current year
+                        const now = new Date();
+                        const isCurrentYear = date.getFullYear() === now.getFullYear();
+                        
+                        const options: Intl.DateTimeFormatOptions = {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        };
+                        
+                        if (!isCurrentYear) {
+                          options.year = 'numeric';
+                        }
+                        
+                        return date.toLocaleDateString('en-US', options).replace(',', ' at');
+                      } catch (e) {
+                        return label;
+                      }
+                    }}
+                    itemSorter={(item) => {
+                      // Explicitly ensure sentiment appears first
+                      return item.name === 'Sentiment' ? 0 : 1;
                     }}
                     labelStyle={{ color: '#8b4513' }}
                     contentStyle={{ 
@@ -459,15 +488,19 @@ const Claudometer = () => {
                                 {entry.dataKey === 'sentiment' ? (
                                   // Solid line with dot for sentiment
                                   <>
-                                    <line x1="0" y1="4" x2="20" y2="4" stroke={entry.color} strokeWidth="3" />
-                                    <circle cx="10" cy="4" r="3" fill={entry.color} stroke="#fff" strokeWidth="1" />
+                                    <line x1="0" y1="4" x2="20" y2="4" stroke="#d4a37f" strokeWidth="3" />
+                                    <circle cx="10" cy="4" r="3" fill="#d4a37f" stroke="#fff" strokeWidth="1" />
                                   </>
                                 ) : (
                                   // Dashed line for post count
-                                  <line x1="0" y1="4" x2="20" y2="4" stroke={entry.color} strokeWidth="2" strokeDasharray="5 5" opacity="0.6" />
+                                  <line x1="0" y1="4" x2="20" y2="4" stroke="#c4a77d" strokeWidth="2" strokeDasharray="5 5" opacity="0.8" />
                                 )}
                               </svg>
-                              <span style={{ color: entry.color, fontSize: '14px' }}>{entry.value}</span>
+                              <span style={{ 
+                                color: entry.dataKey === 'sentiment' ? '#8b4513' : '#9f6841', 
+                                fontSize: '14px',
+                                fontWeight: 'bold'
+                              }}>{entry.value}</span>
                             </div>
                           ))}
                         </div>
@@ -489,34 +522,36 @@ const Claudometer = () => {
                           {/* Event vertical lines - only renders if events exist */}
                           {payload?.events && payload.events.map((event: any, index: number) => (
                             <g key={event.id}>
-                              {/* Solid vertical line from sentiment dot to tag */}
+                              {/* Vertical line from sentiment dot to event label */}
                               <line 
                                 x1={cx} 
                                 y1={cy}     // Start at sentiment dot
                                 x2={cx} 
-                                y2={15}     // End closer to tag
+                                y2={25}     // End a bit lower than before
                                 stroke="#8b4513" 
                                 strokeWidth={2}
                               />
-                              {/* Event label background - positioned higher */}
+                              {/* Event label background - rounded rectangle with better padding */}
                               <rect
-                                x={cx - (event.title.length * 2.8)}
-                                y={5}
-                                width={event.title.length * 5.6}
-                                height={12}
-                                rx={6}
-                                ry={6}
+                                x={cx - (event.title.length * 2.6 + 4)}  // Add 4px horizontal padding
+                                y={10}      // Add more vertical padding
+                                width={event.title.length * 5.2 + 8}   // Add 8px total horizontal padding (4px each side)
+                                height={18}   // Add 8px total vertical padding (4px each side)
+                                rx={5}      // Slightly more rounded corners
+                                ry={5}      // Slightly more rounded corners
                                 fill="#8b4513"
                                 stroke="#fff"
                                 strokeWidth={1}
+                                opacity={1} // Ensure background is solid
                               />
                               {/* Event label text */}
                               <text
                                 x={cx}
-                                y={13}
+                                y={22}      // Adjusted for centered position in taller rect
                                 textAnchor="middle"
                                 fontSize="9"
-                                fill="#fff"
+                                fill="#ffffff"
+                                fillOpacity={1}    // Ensure text is fully opaque
                                 fontWeight="600"
                               >
                                 {event.title}
@@ -542,11 +577,11 @@ const Claudometer = () => {
                     yAxisId="posts"
                     type="monotone" 
                     dataKey="post_count" 
-                    stroke="#A0522D" 
+                    stroke="#c4a77d" 
                     strokeWidth={2}
                     strokeDasharray="5 5"
                     dot={false}
-                    opacity={0.6}
+                    opacity={0.8}
                     name="Post Count"
                   />
                 </LineChart>
