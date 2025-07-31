@@ -14,12 +14,8 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // CORS headers
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': 'https://claudometer.app',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    };
+    // Dynamic CORS headers based on environment
+    const corsHeaders = getDynamicCorsHeaders(env);
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
@@ -1153,6 +1149,24 @@ async function storeInDatabase(posts, comments, env) {
 }
 
 function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': 'https://claudometer.app',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
+
+function getDynamicCorsHeaders(env) {
+  // In development mode, allow localhost origins for testing
+  if (env.DEV_MODE_ENABLED === 'true') {
+    return {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    };
+  }
+  
+  // Production: only allow claudometer.app
   return {
     'Access-Control-Allow-Origin': 'https://claudometer.app',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
