@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import Reevaluation from './Reevaluation';
@@ -29,6 +29,29 @@ const Claudometer = () => {
   // Store raw data for filtering
 
   const API_BASE = 'https://api.claudometer.app';
+
+  // Memoized expensive computations
+  const sortedTopicData = useMemo(() => {
+    return [...topicData].sort((a, b) => b.value - a.value);
+  }, [topicData]);
+
+  const maxKeywordCount = useMemo(() => {
+    return keywordData.length > 0 ? Math.max(...keywordData.map(k => k.count)) : 0;
+  }, [keywordData]);
+
+  const chartData = useMemo(() => {
+    return [
+      ...hourlyData,
+      // Add events as vertical line markers
+      ...events.map(event => ({
+        time: event.date,
+        sentiment: null,
+        post_count: null,
+        eventMarker: 1, // Will be used for ReferenceLine
+        eventTitle: event.title
+      }))
+    ];
+  }, [hourlyData, events]);
 
 
   // Calculate next refresh time (3 minutes after each hour)
@@ -361,17 +384,7 @@ const Claudometer = () => {
               </h3>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart 
-                  data={[
-                  ...hourlyData,
-                  // Add events as vertical line markers
-                  ...events.map(event => ({
-                    time: event.date,
-                    sentiment: null,
-                    post_count: null,
-                    eventMarker: 1, // Will be used for ReferenceLine
-                    eventTitle: event.title
-                  }))
-                ]}>
+                  data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ead1bf" />
                   <XAxis 
                     dataKey="time"
@@ -466,7 +479,7 @@ const Claudometer = () => {
                     dot={(props) => {
                       const { cx, cy, payload } = props;
                       return (
-                        <g>
+                        <g key={`dot-${payload?.time || cx}`}>
                           {/* Event vertical lines - only renders if events exist */}
                           {payload?.events && payload.events.map((event: any, index: number) => (
                             <g key={event.id}>
@@ -553,7 +566,7 @@ const Claudometer = () => {
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie
-                      data={[...topicData].sort((a, b) => b.value - a.value)}
+                      data={sortedTopicData}
                       cx="50%"
                       cy="50%"
                       innerRadius={50}
@@ -563,7 +576,7 @@ const Claudometer = () => {
                       startAngle={90}
                       endAngle={450}
                     >
-                      {[...topicData].sort((a, b) => b.value - a.value).map((entry, index) => (
+                      {sortedTopicData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color || '#B8A082'} />
                       ))}
                     </Pie>
@@ -580,7 +593,7 @@ const Claudometer = () => {
                 </ResponsiveContainer>
               </div>
               <div className="w-full sm:w-2/5 space-y-3 mt-4 sm:mt-0">
-                {[...topicData].sort((a, b) => b.value - a.value)
+                {sortedTopicData
                   .slice(0, showAllTopics ? topicData.length : 10)
                   .map((item) => (
                     <div key={item.name} className="flex items-center">
@@ -624,7 +637,7 @@ const Claudometer = () => {
             </p>
             <div className="space-y-4">
               {keywordData.slice(0, showAllKeywords ? keywordData.length : 10).map((item) => {
-                const maxCount = Math.max(...keywordData.map(k => k.count));
+                const maxCount = maxKeywordCount;
                 return (
                   <div key={item.keyword} className="flex items-center justify-between">
                     <div className="flex-1">
