@@ -375,7 +375,7 @@ const Claudometer = () => {
 
           {/* Trend Chart */}
           <div className="lg:col-span-2">
-            <div className="rounded-2xl shadow-lg border p-4 sm:py-8 sm:pr-8 sm:pl-4 h-auto" style={{ 
+            <div className="rounded-2xl shadow-lg border p-4 sm:p-8 h-auto" style={{ 
               backgroundColor: 'rgba(255, 255, 255, 0.85)',
               borderColor: 'rgba(212, 163, 127, 0.3)'
             }}>
@@ -414,9 +414,9 @@ const Claudometer = () => {
                     yAxisId="sentiment"
                     domain={[0, 1]} 
                     tickFormatter={(value) => (value * 100).toFixed(0) + '%'}
-                    tick={{ fill: '#9f6841', fontSize: 10 }}
+                    tick={{ fill: '#9f6841', fontSize: 12 }}
                     axisLine={{ stroke: '#ead1bf' }}
-                    width={35}
+                    width={45}
                   />
                   <YAxis 
                     yAxisId="posts"
@@ -445,9 +445,15 @@ const Claudometer = () => {
                     wrapperStyle={{ paddingTop: '20px' }}
                     content={(props) => {
                       const { payload } = props;
+                      // Ensure sentiment appears first by sorting the payload
+                      const sortedPayload = payload ? [...payload].sort((a, b) => {
+                        if (a.dataKey === 'sentiment') return -1;
+                        if (b.dataKey === 'sentiment') return 1;
+                        return 0;
+                      }) : [];
                       return (
                         <div className="flex justify-center gap-6">
-                          {payload?.map((entry, index) => (
+                          {sortedPayload.map((entry, index) => (
                             <div key={index} className="flex items-center gap-2">
                               <svg width="20" height="8">
                                 {entry.dataKey === 'sentiment' ? (
@@ -458,7 +464,7 @@ const Claudometer = () => {
                                   </>
                                 ) : (
                                   // Dashed line for post count
-                                  <line x1="0" y1="4" x2="20" y2="4" stroke={entry.color} strokeWidth="2" strokeDasharray="3 3" opacity="0.6" />
+                                  <line x1="0" y1="4" x2="20" y2="4" stroke={entry.color} strokeWidth="2" strokeDasharray="5 5" opacity="0.6" />
                                 )}
                               </svg>
                               <span style={{ color: entry.color, fontSize: '14px' }}>{entry.value}</span>
