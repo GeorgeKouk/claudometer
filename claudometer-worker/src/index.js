@@ -1755,8 +1755,18 @@ async function getFromCache(key, env) {
     const data = JSON.parse(cached);
     const now = Date.now();
     
-    // Check if cache is expired (55 minutes = 3300000ms)
-    if (now - data.timestamp > 3300000) {
+    // Dynamic cache TTL based on period
+    let cacheTTL = 3300000; // Default 55 minutes for 24h
+    if (key.includes('period=30d')) {
+      cacheTTL = 14400000; // 4 hours for 30d
+    } else if (key.includes('period=all')) {
+      cacheTTL = 14400000; // 4 hours for all
+    } else if (key.includes('period=7d')) {
+      cacheTTL = 7200000; // 2 hours for 7d
+    }
+    
+    // Check if cache is expired
+    if (now - data.timestamp > cacheTTL) {
       // Cache expired, delete it
       await env.CLAUDOMETER_CACHE.delete(key);
       return null;
