@@ -569,7 +569,7 @@ async function getKeywordData(env, url) {
         sentiment: keywordSentiments[keyword].reduce((sum, s) => sum + s, 0) / keywordSentiments[keyword].length
       }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      .slice(0, 20);
     
     // Cache the result
     await setCache(cacheKey, keywordData, env);
