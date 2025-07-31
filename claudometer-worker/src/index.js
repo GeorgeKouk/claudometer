@@ -86,7 +86,7 @@ async function getCurrentSentiment(env, url) {
     if (!validPeriods.includes(period)) {
       return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
     
@@ -95,7 +95,7 @@ async function getCurrentSentiment(env, url) {
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
-        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
       });
     }
     
@@ -125,7 +125,7 @@ async function getCurrentSentiment(env, url) {
     await setCache(cacheKey, data, env);
     
     return new Response(JSON.stringify(data), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
     return new Response(JSON.stringify({ 
@@ -136,7 +136,7 @@ async function getCurrentSentiment(env, url) {
       avg_post_count: 0, 
       avg_comment_count: 0 
     }), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
 }
@@ -149,7 +149,7 @@ async function getTimeSeriesData(env, url) {
     if (!validPeriods.includes(period)) {
       return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
     
@@ -158,7 +158,7 @@ async function getTimeSeriesData(env, url) {
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
-        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
       });
     }
     
@@ -173,11 +173,11 @@ async function getTimeSeriesData(env, url) {
     await setCache(cacheKey, data, env);
     
     return new Response(JSON.stringify(data), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
     return new Response(JSON.stringify([]), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
 }
@@ -370,11 +370,11 @@ async function getCategoryData(env) {
     }));
     
     return new Response(JSON.stringify(categoryData), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     return new Response(JSON.stringify([]), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
@@ -387,7 +387,7 @@ async function getTopicData(env, url) {
     if (!validPeriods.includes(period)) {
       return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
     
@@ -396,7 +396,7 @@ async function getTopicData(env, url) {
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
-        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
       });
     }
     
@@ -460,12 +460,12 @@ async function getTopicData(env, url) {
     await setCache(cacheKey, topicData, env);
     
     return new Response(JSON.stringify(topicData), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
     console.error('Error in getTopicData:', error);
     return new Response(JSON.stringify([]), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
 }
@@ -478,7 +478,7 @@ async function getKeywordData(env, url) {
     if (!validPeriods.includes(period)) {
       return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
     
@@ -487,7 +487,7 @@ async function getKeywordData(env, url) {
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
-        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
       });
     }
     
@@ -571,11 +571,11 @@ async function getKeywordData(env, url) {
     await setCache(cacheKey, keywordData, env);
     
     return new Response(JSON.stringify(keywordData), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
     return new Response(JSON.stringify([]), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
 }
@@ -588,7 +588,7 @@ async function getRecentPosts(env, url) {
     if (!validPeriods.includes(period)) {
       return new Response(JSON.stringify({ error: 'Invalid period. Use: 24h, 7d, 30d, all' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
     
@@ -597,7 +597,7 @@ async function getRecentPosts(env, url) {
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
-        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
       });
     }
     
@@ -626,11 +626,11 @@ async function getRecentPosts(env, url) {
     await setCache(cacheKey, recentPosts, env);
     
     return new Response(JSON.stringify(recentPosts), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
     return new Response(JSON.stringify([]), {
-      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders() })
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
 }
@@ -1148,7 +1148,11 @@ async function storeInDatabase(posts, comments, env) {
   }
 }
 
-function getCorsHeaders() {
+function getCorsHeaders(env = null) {
+  // If env is provided, use dynamic headers; otherwise fallback to production
+  if (env) {
+    return getDynamicCorsHeaders(env);
+  }
   return {
     'Access-Control-Allow-Origin': 'https://claudometer.app',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -1257,7 +1261,7 @@ async function getDevPosts(env, url) {
     if (!startDate || !endDate) {
       return new Response(JSON.stringify({ error: 'start_date and end_date required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
 
@@ -1322,13 +1326,13 @@ async function getDevPosts(env, url) {
     ].sort((a, b) => new Date(b.processed_at) - new Date(a.processed_at));
 
     return new Response(JSON.stringify(allItems), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     console.error('Error in getDevPosts:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
@@ -1340,7 +1344,7 @@ async function reevaluateSentiments(request, env) {
     if (!items || !Array.isArray(items)) {
       return new Response(JSON.stringify({ error: 'items array required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
 
@@ -1406,13 +1410,13 @@ async function reevaluateSentiments(request, env) {
     }
 
     return new Response(JSON.stringify({ results }), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     console.error('Error in reevaluateSentiments:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
@@ -1424,7 +1428,7 @@ async function rollbackSentiments(request, env) {
     if (!items || !Array.isArray(items)) {
       return new Response(JSON.stringify({ error: 'items array required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
 
@@ -1454,13 +1458,13 @@ async function rollbackSentiments(request, env) {
     }
 
     return new Response(JSON.stringify({ results }), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     console.error('Error in rollbackSentiments:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
@@ -1598,7 +1602,7 @@ async function getEventsAdmin(env) {
 </html>`;
 
   return new Response(html, {
-    headers: { 'Content-Type': 'text/html', ...getCorsHeaders() }
+    headers: { 'Content-Type': 'text/html', ...getCorsHeaders(env) }
   });
 }
 
@@ -1618,12 +1622,12 @@ async function getDevEvents(env) {
     }));
     
     return new Response(JSON.stringify(events), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
@@ -1635,7 +1639,7 @@ async function createEvent(request, env) {
     if (!title || !event_date) {
       return new Response(JSON.stringify({ error: 'Title and event_date are required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
     
@@ -1653,12 +1657,12 @@ async function createEvent(request, env) {
     ).run();
     
     return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
@@ -1670,7 +1674,7 @@ async function updateEvent(request, env, eventId) {
     if (!title || !event_date) {
       return new Response(JSON.stringify({ error: 'Title and event_date are required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
       });
     }
     
@@ -1690,12 +1694,12 @@ async function updateEvent(request, env, eventId) {
     ).run();
     
     return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
@@ -1706,12 +1710,12 @@ async function deleteEvent(env, eventId) {
     await stmt.bind(eventId).run();
     
     return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
@@ -1725,12 +1729,12 @@ async function clearCache(env) {
       success: true, 
       message: 'All cache entries cleared successfully' 
     }), {
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...getCorsHeaders() }
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });
   }
 }
