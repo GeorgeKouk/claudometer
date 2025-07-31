@@ -603,7 +603,7 @@ const Claudometer = () => {
               Topic Breakdown
             </h3>
             <div className="flex flex-col sm:flex-row sm:items-center">
-              <div className="w-full sm:w-3/5">
+              <div className="w-full sm:w-1/2">
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie
@@ -633,7 +633,7 @@ const Claudometer = () => {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="w-full sm:w-2/5 space-y-3 mt-4 sm:mt-0">
+              <div className="w-full sm:w-1/2 space-y-3 mt-4 sm:mt-0">
                 {sortedTopicData
                   .slice(0, showAllTopics ? topicData.length : 10)
                   .map((item) => (
