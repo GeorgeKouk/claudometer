@@ -360,7 +360,8 @@ const Claudometer = () => {
                 Sentiment Trend ({timeframe === '24h' ? '24h' : timeframe === '7d' ? '7 days' : timeframe === '30d' ? '30 days' : 'All Time'})
               </h3>
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={[
+                <LineChart 
+                  data={[
                   ...hourlyData,
                   // Add events as vertical line markers
                   ...events.map(event => ({
@@ -400,8 +401,9 @@ const Claudometer = () => {
                     yAxisId="sentiment"
                     domain={[0, 1]} 
                     tickFormatter={(value) => (value * 100).toFixed(0) + '%'}
-                    tick={{ fill: '#9f6841', fontSize: 12 }}
+                    tick={{ fill: '#9f6841', fontSize: 10 }}
                     axisLine={{ stroke: '#ead1bf' }}
+                    width={35}
                   />
                   <YAxis 
                     yAxisId="posts"
@@ -428,21 +430,33 @@ const Claudometer = () => {
                   />
                   <Legend 
                     wrapperStyle={{ paddingTop: '20px' }}
-                    iconType="line"
+                    content={(props) => {
+                      const { payload } = props;
+                      return (
+                        <div className="flex justify-center gap-6">
+                          {payload?.map((entry, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <svg width="20" height="8">
+                                {entry.dataKey === 'sentiment' ? (
+                                  // Solid line with dot for sentiment
+                                  <>
+                                    <line x1="0" y1="4" x2="20" y2="4" stroke={entry.color} strokeWidth="3" />
+                                    <circle cx="10" cy="4" r="3" fill={entry.color} stroke="#fff" strokeWidth="1" />
+                                  </>
+                                ) : (
+                                  // Dashed line for post count
+                                  <line x1="0" y1="4" x2="20" y2="4" stroke={entry.color} strokeWidth="2" strokeDasharray="3 3" opacity="0.6" />
+                                )}
+                              </svg>
+                              <span style={{ color: entry.color, fontSize: '14px' }}>{entry.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }}
                   />
                   
                   
-                  <Line 
-                    yAxisId="posts"
-                    type="monotone" 
-                    dataKey="post_count" 
-                    stroke="#A0522D" 
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    opacity={0.6}
-                    name="Post Count"
-                  />
                   <Line 
                     yAxisId="sentiment"
                     type="monotone" 
@@ -456,34 +470,35 @@ const Claudometer = () => {
                           {/* Event vertical lines - only renders if events exist */}
                           {payload?.events && payload.events.map((event: any, index: number) => (
                             <g key={event.id}>
-                              {/* Vertical dashed line */}
+                              {/* Solid vertical line from sentiment dot to tag */}
                               <line 
                                 x1={cx} 
                                 y1={cy}     // Start at sentiment dot
                                 x2={cx} 
-                                y2={8}      // End at top of rectangle
+                                y2={15}     // End closer to tag
                                 stroke="#8b4513" 
-                                strokeWidth={2} 
-                                strokeDasharray="4 4"
+                                strokeWidth={2}
                               />
-                              {/* Event label background */}
+                              {/* Event label background - positioned higher */}
                               <rect
-                                x={cx - (event.title.length * 3)}
-                                y={8}
-                                width={event.title.length * 6}
-                                height={14}
-                                rx={3}
-                                ry={3}
+                                x={cx - (event.title.length * 2.8)}
+                                y={5}
+                                width={event.title.length * 5.6}
+                                height={12}
+                                rx={6}
+                                ry={6}
                                 fill="#8b4513"
+                                stroke="#fff"
+                                strokeWidth={1}
                               />
                               {/* Event label text */}
                               <text
                                 x={cx}
-                                y={18}
+                                y={13}
                                 textAnchor="middle"
-                                fontSize="10"
+                                fontSize="9"
                                 fill="#fff"
-                                fontWeight="bold"
+                                fontWeight="600"
                               >
                                 {event.title}
                               </text>
@@ -503,6 +518,17 @@ const Claudometer = () => {
                     }}
                     activeDot={{ r: 5, stroke: '#d4a37f', strokeWidth: 2, fill: '#ffffff' }}
                     name="Sentiment"
+                  />
+                  <Line 
+                    yAxisId="posts"
+                    type="monotone" 
+                    dataKey="post_count" 
+                    stroke="#A0522D" 
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    opacity={0.6}
+                    name="Post Count"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -556,7 +582,7 @@ const Claudometer = () => {
               <div className="w-full sm:w-2/5 space-y-3 mt-4 sm:mt-0">
                 {[...topicData].sort((a, b) => b.value - a.value)
                   .slice(0, showAllTopics ? topicData.length : 10)
-                  .map((item, index) => (
+                  .map((item) => (
                     <div key={item.name} className="flex items-center">
                       <div 
                         className="w-4 h-4 rounded-full mr-3 shadow-sm" 
@@ -597,7 +623,7 @@ const Claudometer = () => {
               Color and tag show sentiment toward that keyword.
             </p>
             <div className="space-y-4">
-              {keywordData.slice(0, showAllKeywords ? keywordData.length : 10).map((item, index) => {
+              {keywordData.slice(0, showAllKeywords ? keywordData.length : 10).map((item) => {
                 const maxCount = Math.max(...keywordData.map(k => k.count));
                 return (
                   <div key={item.keyword} className="flex items-center justify-between">
