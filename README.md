@@ -1,4 +1,8 @@
-# Claudometer 📊
+# Claudometer 
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/GeorgeKouk/claudometer)](https://github.com/GeorgeKouk/claudometer/stargazers)
+[![Live Demo](https://img.shields.io/badge/demo-live-green.svg)](https://claudometer.app)
 
 Real-time Reddit sentiment tracking for Claude AI mentions across r/Anthropic, r/ClaudeAI, and r/ClaudeCode.
 
@@ -7,7 +11,7 @@ Real-time Reddit sentiment tracking for Claude AI mentions across r/Anthropic, r
 - **Web Application**: https://claudometer.app
 - **API Endpoints**: https://api.claudometer.app
 
-## 📋 Overview
+## Overview
 
 Claudometer monitors Reddit discussions about Claude AI and provides:
 
@@ -18,7 +22,7 @@ Claudometer monitors Reddit discussions about Claude AI and provides:
 - **Event annotations** for significant moments
 - **Hourly automated data collection**
 
-## 🏗️ Architecture
+## Architecture
 
 - **Frontend**: React + TypeScript + Tailwind CSS (deployed on Cloudflare Pages)
 - **Backend**: Cloudflare Workers with JavaScript
@@ -27,7 +31,7 @@ Claudometer monitors Reddit discussions about Claude AI and provides:
 - **External APIs**: Reddit OAuth + OpenAI GPT-4o-mini
 - **Monitoring**: r/Anthropic, r/ClaudeAI, r/ClaudeCode
 
-## 🚀 Features
+## Features
 
 ### Dashboard
 - Sentiment gauge with real-time scores
@@ -49,7 +53,7 @@ Claudometer monitors Reddit discussions about Claude AI and provides:
 - **Sub-second dashboard loads** when cache is warm
 - **Automatic cache invalidation** after data updates
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 Claudometer/
@@ -68,7 +72,7 @@ Claudometer/
     └── CLAUDE.md           # Technical implementation guide
 ```
 
-## 🛠️ Setup & Development
+## Setup & Development
 
 ### Prerequisites
 - Node.js 16+
@@ -113,7 +117,7 @@ See [project-summary.md](project-summary.md) and [CLAUDE.md](CLAUDE.md) for comp
 - Database migrations
 - Deployment configuration
 
-## 🔐 Environment Variables
+## Environment Variables
 
 All sensitive credentials are managed via Cloudflare Workers secrets:
 
@@ -121,7 +125,7 @@ All sensitive credentials are managed via Cloudflare Workers secrets:
 - `REDDIT_CLIENT_SECRET` - Reddit API client secret
 - `OPENAI_API_KEY` - OpenAI API key for sentiment analysis
 
-## 📊 Data Collection
+## Data Collection
 
 - **Frequency**: Every hour via Cloudflare Workers cron
 - **Sources**: 20 posts + 5 top comments per subreddit
@@ -129,22 +133,22 @@ All sensitive credentials are managed via Cloudflare Workers secrets:
 - **Storage**: Posts and comments stored separately with weighted sentiment
 - **Caching**: 55-minute API response cache with automatic invalidation
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Reddit API** for providing access to community discussions
 - **OpenAI** for sentiment analysis capabilities
 - **Cloudflare** for the robust infrastructure platform
 - **Claude AI community** for the engaging discussions we monitor
 
-## 📈 Stats
+## Stats
 
 - **Monitoring**: 3 subreddits
 - **Data Points**: 180+ items collected hourly
