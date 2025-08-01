@@ -21,6 +21,33 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
+    // Rate limiting: 20 requests per hour per IP
+    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rateLimitKey = `rate_limit:${clientIP}`;
+    
+    try {
+      const requestCount = await env.CLAUDOMETER_CACHE.get(rateLimitKey);
+      const currentCount = requestCount ? parseInt(requestCount) : 0;
+      
+      if (currentCount >= 20) {
+        return new Response(JSON.stringify({ 
+          error: 'Rate limit exceeded', 
+          message: 'Maximum 20 requests per hour allowed' 
+        }), { 
+          status: 429, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Increment counter with 1 hour expiration
+      await env.CLAUDOMETER_CACHE.put(rateLimitKey, (currentCount + 1).toString(), { 
+        expirationTtl: 3600 
+      });
+    } catch (rateLimitError) {
+      console.error('Rate limiting error:', rateLimitError);
+      // Continue processing request if rate limiting fails
+    }
+
     try {
       if (path === '/current-sentiment') {
         return await getCurrentSentiment(env, url);
