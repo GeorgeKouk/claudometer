@@ -52,3 +52,6 @@ Thumbs.db
 
 # Wrangler
 .wrangler/
+
+# Development planning and notes
+feature-planning/
