@@ -1,0 +1,260 @@
+/**
+ * Development Handlers - Development and debugging endpoint handlers
+ * Only accessible when DEV_MODE_ENABLED=true
+ */
+
+// Import service functions
+import { clearCachePattern } from '../services/cache.service.js';
+import { analyzeWithOpenAI } from '../services/ai.service.js';
+import { getCorsHeaders } from '../utils/cors.js';
+import { getTruncatedText } from '../utils/helpers.js';
+
+/**
+ * Gets posts and comments for debugging/reevaluation
+ */
+export async function getDevPosts(env, url) {
+  try {
+    const startDate = url.searchParams.get('start_date');
+    const endDate = url.searchParams.get('end_date');
+    
+    if (!startDate || !endDate) {
+      return new Response(JSON.stringify({ error: 'start_date and end_date required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+      });
+    }
+
+    const postsStmt = env.DB.prepare(`
+      SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, 'post' as type
+      FROM posts 
+      WHERE processed_at >= ? AND processed_at <= ?
+      ORDER BY processed_at DESC
+    `);
+    
+    const results = await postsStmt.bind(startDate, endDate).all();
+    
+    const items = results.results.map(post => ({
+      id: post.id,
+      type: 'post',
+      title: post.title,
+      content: post.content,
+      truncatedContent: getTruncatedText(post.title, post.content),
+      subreddit: post.subreddit,
+      sentiment: post.sentiment,
+      category: post.category,
+      keywords: post.keywords,
+      processed_at: post.processed_at
+    }));
+
+    return new Response(JSON.stringify(items), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Re-evaluates sentiment for selected posts/comments
+ */
+export async function reevaluateSentiments(request, env) {
+  try {
+    const { items } = await request.json();
+    
+    if (!items || !Array.isArray(items)) {
+      return new Response(JSON.stringify({ error: 'items array required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+      });
+    }
+
+    const results = [];
+    
+    for (const item of items) {
+      try {
+        const analyzed = await analyzeWithOpenAI([{
+          id: item.id,
+          title: item.title,
+          content: item.content
+        }], env.OPENAI_API_KEY, env);
+
+        if (analyzed.length > 0) {
+          const newSentiment = analyzed[0].sentiment;
+          const newCategory = analyzed[0].category;
+          const newKeywords = analyzed[0].keywords;
+
+          await env.DB.prepare(`
+            UPDATE posts 
+            SET sentiment = ?, category = ?, keywords = ?
+            WHERE id = ?
+          `).bind(newSentiment, newCategory, newKeywords, item.id).run();
+
+          results.push({
+            id: item.id,
+            type: item.type,
+            title: item.title,
+            oldSentiment: item.sentiment,
+            newSentiment: newSentiment,
+            oldCategory: item.category,
+            newCategory: newCategory
+          });
+        }
+      } catch (error) {
+        results.push({
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          error: error.message
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ results }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Rolls back sentiment changes to previous values
+ */
+export async function rollbackSentiments(request, env) {
+  return new Response(JSON.stringify({ message: 'Rollback not implemented yet' }), {
+    status: 501,
+    headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+  });
+}
+
+/**
+ * Simple HTML interface for event management
+ */
+export async function getEventsAdmin(env) {
+  const html = '<html><body><h1>Events Admin - Simplified</h1><p>Event management interface coming soon</p></body></html>';
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html', ...getCorsHeaders(env) }
+  });
+}
+
+/**
+ * Gets all events (JSON endpoint)
+ */
+export async function getDevEvents(env) {
+  try {
+    const stmt = env.DB.prepare('SELECT * FROM events ORDER BY event_date DESC');
+    const results = await stmt.all();
+    
+    const events = results.results.map(row => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      date: row.event_date,
+      type: row.event_type,
+      url: row.url
+    }));
+    
+    return new Response(JSON.stringify(events), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Creates a new event
+ */
+export async function createEvent(request, env) {
+  try {
+    const { title, description, event_date, event_type, url } = await request.json();
+    
+    if (!title || !event_date) {
+      return new Response(JSON.stringify({ error: 'Title and event_date are required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+      });
+    }
+    
+    const stmt = env.DB.prepare(`
+      INSERT INTO events (title, description, event_date, event_type, url)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    await stmt.bind(
+      title,
+      description || null,
+      event_date,
+      event_type || 'announcement',
+      url || null
+    ).run();
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Updates an existing event
+ */
+export async function updateEvent(request, env, eventId) {
+  return new Response(JSON.stringify({ message: 'Update not implemented yet' }), {
+    status: 501,
+    headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+  });
+}
+
+/**
+ * Deletes an event
+ */
+export async function deleteEvent(env, eventId) {
+  try {
+    const stmt = env.DB.prepare('DELETE FROM events WHERE id = ?');
+    await stmt.bind(eventId).run();
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Clears all cache entries
+ */
+export async function clearCache(env) {
+  try {
+    await clearCachePattern('', env);
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: 'All cache entries cleared successfully' 
+    }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
