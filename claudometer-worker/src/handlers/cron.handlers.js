@@ -49,8 +49,8 @@ export async function collectRedditData(env, platformId = DEFAULT_PLATFORM, subr
     // Analyze comments with platform-specific configuration
     const analyzedComments = await analyzeWithOpenAI(comments, env.OPENAI_API_KEY, env, platformConfig);
     
-    // Store both in database
-    await storeInDatabase(analyzedPosts, analyzedComments, env);
+    // Store both in database with platform_id
+    await storeInDatabase(analyzedPosts, analyzedComments, env, platformConfig.id);
     
     // Clear all caches after new data collection
     await clearCachePattern('', env); // Clear all claudometer cache entries

@@ -1,5 +1,13 @@
 # Claudometer Project - Development Guide
 
+## ⚠️ CRITICAL PRODUCTION SAFETY RULES ⚠️
+**NEVER DEPLOY TO CLOUDFLARE WITHOUT EXPLICIT USER PERMISSION**
+- **NEVER** run `npm run deploy` or `wrangler deploy` - these deploy to live Cloudflare Workers in production
+- **NEVER** modify the production database without explicit user permission  
+- **ALWAYS** ask before any action that affects the live application
+- **REMEMBER**: Frontend and backend compatibility must be maintained - deploying incompatible API changes will break the live application
+- **LOCAL DEVELOPMENT OK**: `npm run dev` and `wrangler dev` are safe for local testing
+
 ## Required Reading
 **IMPORTANT**: Always read both files for complete project understanding:
 - **project-summary.md** - Comprehensive project overview, architecture, and setup instructions

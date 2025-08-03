@@ -10,10 +10,10 @@ import { getCorsHeaders } from '../utils/cors.js';
 import { getTimeAgo } from '../utils/helpers.js';
 
 /**
- * Gets current sentiment data for specified time period
+ * Gets current sentiment data for specified time period across all platforms
  * @param {Object} env - Cloudflare Workers environment
  * @param {URL} url - Request URL with query parameters
- * @returns {Response} JSON response with current sentiment metrics
+ * @returns {Response} JSON response with multi-platform current sentiment metrics
  */
 export async function getCurrentSentiment(env, url) {
   try {
@@ -27,7 +27,7 @@ export async function getCurrentSentiment(env, url) {
       });
     }
     
-    // Check cache first
+    // Check cache first (now platform-aware)
     const cacheKey = getCacheKey('current-sentiment', { period });
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
@@ -36,27 +36,46 @@ export async function getCurrentSentiment(env, url) {
       });
     }
     
-    // Get latest sentiment (most recent data point)
-    const latestStmt = env.DB.prepare('SELECT weighted_sentiment, post_count, comment_count FROM sentiment_hourly ORDER BY hour DESC LIMIT 1');
-    const latestResult = await latestStmt.first();
+    // Get available platforms
+    const platformsResult = await env.DB.prepare('SELECT id, display_name, color FROM platforms WHERE active = 1 ORDER BY id').all();
+    const platforms = platformsResult.results;
     
-    // Get average sentiment for the selected period
-    const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
-    const avgStmt = env.DB.prepare(`
-      SELECT AVG(weighted_sentiment) as avg_sentiment, SUM(post_count) as total_posts, SUM(comment_count) as total_comments
-      FROM sentiment_hourly 
-      WHERE hour >= datetime('now', '-${daysBack} days')
-    `);
-    const avgResult = await avgStmt.first();
+    const data = {};
     
-    const data = {
-      latest_sentiment: latestResult ? latestResult.weighted_sentiment : 0.5,
-      avg_sentiment: avgResult ? avgResult.avg_sentiment || 0.5 : 0.5,
-      latest_post_count: latestResult ? latestResult.post_count || 0 : 0,
-      latest_comment_count: latestResult ? latestResult.comment_count || 0 : 0,
-      avg_post_count: avgResult ? avgResult.total_posts || 0 : 0,
-      avg_comment_count: avgResult ? avgResult.total_comments || 0 : 0
-    };
+    // Get sentiment data for each platform
+    for (const platform of platforms) {
+      const platformId = platform.id;
+      
+      // Get latest sentiment (most recent data point for this platform)
+      const latestStmt = env.DB.prepare(`
+        SELECT weighted_sentiment, post_count, comment_count 
+        FROM sentiment_hourly 
+        WHERE platform_id = ? 
+        ORDER BY hour DESC 
+        LIMIT 1
+      `);
+      const latestResult = await latestStmt.bind(platformId).first();
+      
+      // Get average sentiment for the selected period
+      const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
+      const avgStmt = env.DB.prepare(`
+        SELECT AVG(weighted_sentiment) as avg_sentiment, SUM(post_count) as total_posts, SUM(comment_count) as total_comments
+        FROM sentiment_hourly 
+        WHERE platform_id = ? AND hour >= datetime('now', '-${daysBack} days')
+      `);
+      const avgResult = await avgStmt.bind(platformId).first();
+      
+      data[platformId] = {
+        display_name: platform.display_name,
+        color: platform.color,
+        latest_sentiment: latestResult ? latestResult.weighted_sentiment : 0.5,
+        avg_sentiment: avgResult ? avgResult.avg_sentiment || 0.5 : 0.5,
+        latest_post_count: latestResult ? latestResult.post_count || 0 : 0,
+        latest_comment_count: latestResult ? latestResult.comment_count || 0 : 0,
+        avg_post_count: avgResult ? avgResult.total_posts || 0 : 0,
+        avg_comment_count: avgResult ? avgResult.total_comments || 0 : 0
+      };
+    }
     
     // Cache the result
     await setCache(cacheKey, data, env);
@@ -65,24 +84,51 @@ export async function getCurrentSentiment(env, url) {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
-    return new Response(JSON.stringify({ 
-      latest_sentiment: 0.5, 
-      avg_sentiment: 0.5, 
-      latest_post_count: 0,
-      latest_comment_count: 0,
-      avg_post_count: 0, 
-      avg_comment_count: 0 
-    }), {
+    console.error('getCurrentSentiment error:', error);
+    // Return fallback data for all platforms
+    const fallbackData = {
+      claude: { 
+        display_name: 'Claude AI',
+        color: '#8B4513',
+        latest_sentiment: 0.5, 
+        avg_sentiment: 0.5, 
+        latest_post_count: 0,
+        latest_comment_count: 0,
+        avg_post_count: 0, 
+        avg_comment_count: 0 
+      },
+      chatgpt: {
+        display_name: 'ChatGPT',
+        color: '#10A37F',
+        latest_sentiment: 0.5, 
+        avg_sentiment: 0.5, 
+        latest_post_count: 0,
+        latest_comment_count: 0,
+        avg_post_count: 0, 
+        avg_comment_count: 0 
+      },
+      gemini: {
+        display_name: 'Google Gemini',
+        color: '#4285F4',
+        latest_sentiment: 0.5, 
+        avg_sentiment: 0.5, 
+        latest_post_count: 0,
+        latest_comment_count: 0,
+        avg_post_count: 0, 
+        avg_comment_count: 0 
+      }
+    };
+    return new Response(JSON.stringify(fallbackData), {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
 }
 
 /**
- * Gets time series sentiment data with events
+ * Gets time series sentiment data with events across all platforms
  * @param {Object} env - Cloudflare Workers environment  
  * @param {URL} url - Request URL with query parameters
- * @returns {Response} JSON response with hourly or daily sentiment data
+ * @returns {Response} JSON response with multi-platform hourly or daily sentiment data
  */
 export async function getTimeSeriesData(env, url) {
   try {
@@ -107,9 +153,9 @@ export async function getTimeSeriesData(env, url) {
     
     let data;
     if (period === '24h') {
-      data = await getHourlyDataUncached(env);
+      data = await getMultiPlatformHourlyDataUncached(env);
     } else {
-      data = await getDailyAggregatedDataUncached(env, period);
+      data = await getMultiPlatformDailyAggregatedDataUncached(env, period);
     }
     
     // Cache the result
@@ -119,21 +165,27 @@ export async function getTimeSeriesData(env, url) {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
-    return new Response(JSON.stringify([]), {
+    console.error('getTimeSeriesData error:', error);
+    return new Response(JSON.stringify({ 
+      data: [], 
+      events: [], 
+      platforms: [] 
+    }), {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
 }
 
 /**
- * Gets topic distribution data  
+ * Gets topic distribution data aggregated across all platforms
  * @param {Object} env - Cloudflare Workers environment
  * @param {URL} url - Request URL with query parameters
- * @returns {Response} JSON response with topic breakdown
+ * @returns {Response} JSON response with topic breakdown across all platforms
  */
 export async function getTopicData(env, url) {
   try {
     const period = url?.searchParams?.get('period') || '24h';
+    const platform = url?.searchParams?.get('platform'); // Optional platform filter
     const validPeriods = ['24h', '7d', '30d', 'all'];
     
     if (!validPeriods.includes(period)) {
@@ -143,8 +195,8 @@ export async function getTopicData(env, url) {
       });
     }
     
-    // Check cache first
-    const cacheKey = getCacheKey('topics', { period });
+    // Check cache first (include platform in cache key if specified)
+    const cacheKey = getCacheKey('topics', { period, platform });
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
@@ -156,9 +208,12 @@ export async function getTopicData(env, url) {
     const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
     const dateFilter = period === 'all' ? '' : `AND processed_at > datetime("now", "-${daysBack} days")`;
     
-    // Get topics from category field with post/comment counts and weighted sentiment
-    const postsStmt = env.DB.prepare(`SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE category IS NOT NULL ${dateFilter} GROUP BY category`);
-    const commentsStmt = env.DB.prepare(`SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE category IS NOT NULL ${dateFilter} GROUP BY category`);
+    // Add platform filter if specified
+    const platformFilter = platform ? `AND platform_id = '${platform}'` : '';
+    
+    // Get topics from category field with post/comment counts and weighted sentiment (multi-platform aware)
+    const postsStmt = env.DB.prepare(`SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE category IS NOT NULL ${dateFilter} ${platformFilter} GROUP BY category`);
+    const commentsStmt = env.DB.prepare(`SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE category IS NOT NULL ${dateFilter} ${platformFilter} GROUP BY category`);
     
     const [postsResults, commentsResults] = await Promise.all([
       postsStmt.all(),
@@ -223,14 +278,15 @@ export async function getTopicData(env, url) {
 }
 
 /**
- * Gets trending keywords data
+ * Gets trending keywords data aggregated across all platforms
  * @param {Object} env - Cloudflare Workers environment
  * @param {URL} url - Request URL with query parameters
- * @returns {Response} JSON response with keyword analysis
+ * @returns {Response} JSON response with keyword analysis across all platforms
  */
 export async function getKeywordData(env, url) {
   try {
     const period = url?.searchParams?.get('period') || '24h';
+    const platform = url?.searchParams?.get('platform'); // Optional platform filter
     const validPeriods = ['24h', '7d', '30d', 'all'];
     
     if (!validPeriods.includes(period)) {
@@ -240,8 +296,8 @@ export async function getKeywordData(env, url) {
       });
     }
     
-    // Check cache first
-    const cacheKey = getCacheKey('keywords', { period });
+    // Check cache first (include platform in cache key if specified)
+    const cacheKey = getCacheKey('keywords', { period, platform });
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
@@ -253,9 +309,12 @@ export async function getKeywordData(env, url) {
     const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
     const dateFilter = period === 'all' ? '' : `AND processed_at > datetime("now", "-${daysBack} days")`;
     
+    // Add platform filter if specified
+    const platformFilter = platform ? `AND platform_id = '${platform}'` : '';
+    
     // Get keywords from both posts and comments - strict count basis (no weighting for counts)
-    const postsStmt = env.DB.prepare(`SELECT keywords, sentiment FROM posts WHERE keywords IS NOT NULL ${dateFilter}`);
-    const commentsStmt = env.DB.prepare(`SELECT keywords, sentiment FROM comments WHERE keywords IS NOT NULL ${dateFilter}`);
+    const postsStmt = env.DB.prepare(`SELECT keywords, sentiment FROM posts WHERE keywords IS NOT NULL ${dateFilter} ${platformFilter}`);
+    const commentsStmt = env.DB.prepare(`SELECT keywords, sentiment FROM comments WHERE keywords IS NOT NULL ${dateFilter} ${platformFilter}`);
     
     const [postsResults, commentsResults] = await Promise.all([
       postsStmt.all(),
@@ -339,14 +398,15 @@ export async function getKeywordData(env, url) {
 }
 
 /**
- * Gets recent posts feed
+ * Gets recent posts feed with platform information
  * @param {Object} env - Cloudflare Workers environment
  * @param {URL} url - Request URL with query parameters  
- * @returns {Response} JSON response with recent posts
+ * @returns {Response} JSON response with recent posts including platform info
  */
 export async function getRecentPosts(env, url) {
   try {
     const period = url?.searchParams?.get('period') || '24h';
+    const platform = url?.searchParams?.get('platform'); // Optional platform filter
     const validPeriods = ['24h', '7d', '30d', 'all'];
     
     if (!validPeriods.includes(period)) {
@@ -356,8 +416,8 @@ export async function getRecentPosts(env, url) {
       });
     }
     
-    // Check cache first
-    const cacheKey = getCacheKey('recent-posts', { period });
+    // Check cache first (include platform in cache key if specified)
+    const cacheKey = getCacheKey('recent-posts', { period, platform });
     const cached = await getFromCache(cacheKey, env);
     if (cached) {
       return new Response(JSON.stringify(cached), {
@@ -367,13 +427,28 @@ export async function getRecentPosts(env, url) {
     
     // Calculate date filter based on period
     const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
-    const dateFilter = period === 'all' ? '' : `WHERE processed_at > datetime("now", "-${daysBack} days")`;
+    const dateFilter = period === 'all' ? '' : `processed_at > datetime("now", "-${daysBack} days")`;
+    
+    // Add platform filter if specified
+    const platformFilter = platform ? `platform_id = '${platform}'` : '';
+    
+    // Combine filters
+    let whereClause = '';
+    if (dateFilter && platformFilter) {
+      whereClause = `WHERE ${dateFilter} AND ${platformFilter}`;
+    } else if (dateFilter) {
+      whereClause = `WHERE ${dateFilter}`;
+    } else if (platformFilter) {
+      whereClause = `WHERE ${platformFilter}`;
+    }
     
     const stmt = env.DB.prepare(`
-      SELECT title, subreddit, sentiment, created_at, category
-      FROM posts
-      ${dateFilter}
-      ORDER BY processed_at DESC LIMIT 10
+      SELECT posts.title, posts.subreddit, posts.sentiment, posts.created_at, posts.category, posts.platform_id,
+             platforms.display_name as platform_name, platforms.color as platform_color
+      FROM posts 
+      LEFT JOIN platforms ON posts.platform_id = platforms.id
+      ${whereClause}
+      ORDER BY posts.processed_at DESC LIMIT 10
     `);
     const results = await stmt.all();
     
@@ -383,7 +458,12 @@ export async function getRecentPosts(env, url) {
       title: row.title,
       sentiment: row.sentiment || 0.5,
       category: row.category || 'Features',
-      time: getTimeAgo(row.created_at)
+      time: getTimeAgo(row.created_at),
+      platform: {
+        id: row.platform_id,
+        name: row.platform_name || 'Unknown',
+        color: row.platform_color || '#CCCCCC'
+      }
     }));
     
     // Cache the result
@@ -394,6 +474,77 @@ export async function getRecentPosts(env, url) {
     });
   } catch (error) {
     return new Response(JSON.stringify([]), {
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
+    });
+  }
+}
+
+/**
+ * Gets platform metadata and configuration
+ * @param {Object} env - Cloudflare Workers environment
+ * @param {URL} url - Request URL with query parameters
+ * @returns {Response} JSON response with platform information
+ */
+export async function getPlatformData(env, url) {
+  try {
+    // Check cache first
+    const cacheKey = getCacheKey('platforms', {});
+    const cached = await getFromCache(cacheKey, env);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
+      });
+    }
+    
+    // Get platform data from database
+    const stmt = env.DB.prepare('SELECT id, display_name, color, description, subreddits, active FROM platforms ORDER BY id');
+    const results = await stmt.all();
+    
+    const platforms = results.results.map(row => ({
+      id: row.id,
+      name: row.display_name,
+      color: row.color,
+      description: row.description,
+      subreddits: JSON.parse(row.subreddits || '[]'),
+      active: Boolean(row.active)
+    }));
+    
+    // Cache the result (platforms change rarely)
+    await setCache(cacheKey, platforms, env, 3600); // Cache for 1 hour
+    
+    return new Response(JSON.stringify(platforms), {
+      headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
+    });
+  } catch (error) {
+    console.error('getPlatformData error:', error);
+    // Return fallback platform data
+    const fallbackPlatforms = [
+      {
+        id: 'claude',
+        name: 'Claude AI',
+        color: '#8B4513',
+        description: 'Anthropic Claude AI assistant monitoring',
+        subreddits: ['Anthropic', 'ClaudeAI', 'ClaudeCode'],
+        active: true
+      },
+      {
+        id: 'chatgpt',
+        name: 'ChatGPT',
+        color: '#10A37F',
+        description: 'OpenAI ChatGPT monitoring',
+        subreddits: ['ChatGPT', 'OpenAI', 'GPT4'],
+        active: true
+      },
+      {
+        id: 'gemini',
+        name: 'Google Gemini',
+        color: '#4285F4',
+        description: 'Google Gemini AI monitoring',
+        subreddits: ['GoogleAI', 'Bard', 'Gemini'],
+        active: true
+      }
+    ];
+    return new Response(JSON.stringify(fallbackPlatforms), {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
@@ -538,5 +689,177 @@ async function getDailyAggregatedDataUncached(env, period) {
     return dailyData;
   } catch (error) {
     return [];
+  }
+}
+
+// New multi-platform helper functions
+
+async function getMultiPlatformHourlyDataUncached(env) {
+  try {
+    // Calculate 24 hours ago in UTC to match our stored timestamps
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000)).toISOString();
+    
+    // Get available platforms
+    const platformsResult = await env.DB.prepare('SELECT id, display_name, color FROM platforms WHERE active = 1 ORDER BY id').all();
+    const platforms = platformsResult.results;
+    
+    // Get data for all platforms for the last 24 hours
+    const stmt = env.DB.prepare(`
+      SELECT hour, platform_id, weighted_sentiment, post_count, comment_count 
+      FROM sentiment_hourly 
+      WHERE hour >= ?
+      ORDER BY hour ASC, platform_id ASC
+    `);
+    const results = await stmt.bind(twentyFourHoursAgo).all();
+    
+    // Get events for the last 24 hours (platform-agnostic events for now)
+    const eventsStmt = env.DB.prepare(`
+      SELECT id, title, description, event_date, event_type, url
+      FROM events 
+      WHERE event_date >= datetime(?, '-2 hours') AND event_date <= datetime('now', '+2 hours')
+      ORDER BY event_date ASC
+    `);
+    const eventsResults = await eventsStmt.bind(twentyFourHoursAgo).all();
+    
+    // Transform events data
+    const events = eventsResults.results.map(row => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      date: row.event_date,
+      type: row.event_type,
+      url: row.url
+    }));
+    
+    // Group data by hour
+    const timeMap = {};
+    results.results.forEach(row => {
+      const time = row.hour;
+      if (!timeMap[time]) {
+        timeMap[time] = {};
+      }
+      
+      timeMap[time][row.platform_id] = {
+        sentiment: row.weighted_sentiment || 0.5,
+        post_count: row.post_count || 0,
+        comment_count: row.comment_count || 0,
+        posts: (row.post_count || 0) + (row.comment_count || 0)
+      };
+    });
+    
+    // Convert to array format
+    const hourlyData = Object.keys(timeMap).sort().map(time => ({
+      time,
+      platforms: timeMap[time]
+    }));
+    
+    // Create platform metadata
+    const platformsMetadata = platforms.map(p => ({
+      id: p.id,
+      name: p.display_name,
+      color: p.color
+    }));
+    
+    return {
+      data: hourlyData,
+      events: events,
+      platforms: platformsMetadata
+    };
+  } catch (error) {
+    console.error('Error in getMultiPlatformHourlyDataUncached:', error);
+    return {
+      data: [],
+      events: [],
+      platforms: []
+    };
+  }
+}
+
+async function getMultiPlatformDailyAggregatedDataUncached(env, period) {
+  try {
+    const daysBack = period === '7d' ? 7 : period === '30d' ? 30 : 365; // 'all' = 1 year max
+    
+    // Get available platforms
+    const platformsResult = await env.DB.prepare('SELECT id, display_name, color FROM platforms WHERE active = 1 ORDER BY id').all();
+    const platforms = platformsResult.results;
+    
+    const stmt = env.DB.prepare(`
+      SELECT 
+        date(hour) as date,
+        platform_id,
+        AVG(weighted_sentiment) as sentiment,
+        SUM(post_count) as post_count,
+        SUM(comment_count) as comment_count,
+        SUM(post_count + comment_count) as total_posts
+      FROM sentiment_hourly 
+      WHERE hour >= datetime('now', '-${daysBack} days')
+      GROUP BY date(hour), platform_id
+      ORDER BY date DESC, platform_id ASC
+    `);
+    
+    const results = await stmt.all();
+    
+    // Get events for the selected period (with timezone buffer)
+    const eventsStmt = env.DB.prepare(`
+      SELECT id, title, description, event_date, event_type, url
+      FROM events 
+      WHERE event_date >= datetime('now', '-${daysBack} days', '-2 hours') 
+        AND event_date <= datetime('now', '+2 hours')
+      ORDER BY event_date ASC
+    `);
+    const eventsResults = await eventsStmt.all();
+    
+    // Transform events data
+    const events = eventsResults.results.map(row => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      date: row.event_date,
+      type: row.event_type,
+      url: row.url
+    }));
+    
+    // Group data by date
+    const dateMap = {};
+    results.results.forEach(row => {
+      const date = row.date;
+      if (!dateMap[date]) {
+        dateMap[date] = {};
+      }
+      
+      dateMap[date][row.platform_id] = {
+        sentiment: row.sentiment || 0.5,
+        post_count: row.post_count || 0,
+        comment_count: row.comment_count || 0,
+        posts: row.total_posts || 0
+      };
+    });
+    
+    // Convert to array format
+    const dailyData = Object.keys(dateMap).sort().reverse().map(date => ({
+      time: date + 'T00:00:00Z', // Standardize format
+      platforms: dateMap[date]
+    }));
+    
+    // Create platform metadata
+    const platformsMetadata = platforms.map(p => ({
+      id: p.id,
+      name: p.display_name,
+      color: p.color
+    }));
+    
+    return {
+      data: dailyData,
+      events: events,
+      platforms: platformsMetadata
+    };
+  } catch (error) {
+    console.error('Error in getMultiPlatformDailyAggregatedDataUncached:', error);
+    return {
+      data: [],
+      events: [],
+      platforms: []
+    };
   }
 }

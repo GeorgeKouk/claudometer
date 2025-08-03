@@ -15,7 +15,7 @@ import { getRedditAccessToken, fetchRedditPosts } from './services/reddit.servic
 import { analyzeWithOpenAI } from './services/ai.service.js';
 
 // Import handler functions
-import { getCurrentSentiment, getTimeSeriesData, getTopicData, getKeywordData, getRecentPosts } from './handlers/api.handlers.js';
+import { getCurrentSentiment, getTimeSeriesData, getTopicData, getKeywordData, getRecentPosts, getPlatformData } from './handlers/api.handlers.js';
 import { getDevPosts, reevaluateSentiments, rollbackSentiments, getEventsAdmin, getDevEvents, createEvent, updateEvent, deleteEvent, clearCache } from './handlers/dev.handlers.js';
 import { collectRedditData } from './handlers/cron.handlers.js';
 import { CLAUDE_PLATFORM, CHATGPT_PLATFORM, GEMINI_PLATFORM } from './config/platforms.js';
@@ -74,6 +74,8 @@ export default {
         return await getKeywordData(env, url);
       } else if (path === '/recent-posts') {
         return await getRecentPosts(env, url);
+      } else if (path === '/platforms') {
+        return await getPlatformData(env, url);
 
       // Development endpoints (DEV_MODE_ENABLED required)
       } else if (path === '/dev/posts' && env.DEV_MODE_ENABLED === 'true') {

@@ -59,7 +59,7 @@ export const CHATGPT_PLATFORM = {
   description: 'OpenAI ChatGPT monitoring',
   
   // Subreddits to monitor for ChatGPT-related content
-  subreddits: ['ChatGPT', 'OpenAI', 'artificial'],
+  subreddits: ['ChatGPT', 'OpenAI', 'GPT4'],
   
   // Data collection settings
   collection: {
@@ -106,7 +106,7 @@ export const GEMINI_PLATFORM = {
   description: 'Google Gemini AI monitoring',
   
   // Subreddits to monitor for Gemini-related content
-  subreddits: ['GoogleAI', 'Bard', 'artificial'],
+  subreddits: ['GoogleAI', 'Bard', 'Gemini'],
   
   // Data collection settings
   collection: {

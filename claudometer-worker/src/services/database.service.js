@@ -8,9 +8,10 @@
  * @param {Array} posts - Array of analyzed post objects
  * @param {Array} comments - Array of analyzed comment objects
  * @param {Object} env - Cloudflare Workers environment
+ * @param {string} platformId - Platform identifier (default: 'claude')
  */
-export async function storeInDatabase(posts, comments, env) {
-  console.log(`storeInDatabase called with ${posts.length} posts, ${comments.length} comments`);
+export async function storeInDatabase(posts, comments, env, platformId = 'claude') {
+  console.log(`storeInDatabase called with ${posts.length} posts, ${comments.length} comments for platform: ${platformId}`);
   
   if (!env.DB) {
     console.error('CRITICAL: Database not available');
@@ -18,12 +19,12 @@ export async function storeInDatabase(posts, comments, env) {
   }
 
   try {
-    // Store posts (existing table)
+    // Store posts with platform_id
     for (const post of posts) {
       const stmt = env.DB.prepare(`
         INSERT OR REPLACE INTO posts 
-        (id, title, content, subreddit, created_at, score, sentiment, category, keywords, processed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        (id, title, content, subreddit, created_at, score, sentiment, category, keywords, platform_id, processed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
       
       await stmt.bind(
@@ -35,16 +36,17 @@ export async function storeInDatabase(posts, comments, env) {
         post.score,
         post.sentiment,
         post.category,
-        post.keywords
+        post.keywords,
+        platformId
       ).run();
     }
 
-    // Store comments (new table)
+    // Store comments with platform_id
     for (const comment of comments) {
       const stmt = env.DB.prepare(`
         INSERT OR REPLACE INTO comments 
-        (id, post_id, body, subreddit, score, sentiment, category, keywords, created_at, processed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        (id, post_id, body, subreddit, score, sentiment, category, keywords, created_at, platform_id, processed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
       
       await stmt.bind(
@@ -56,7 +58,8 @@ export async function storeInDatabase(posts, comments, env) {
         comment.sentiment,
         comment.category,
         comment.keywords,
-        comment.created_at
+        comment.created_at,
+        platformId
       ).run();
     }
 
@@ -74,12 +77,13 @@ export async function storeInDatabase(posts, comments, env) {
 
     const hourlyStmt = env.DB.prepare(`
       INSERT OR REPLACE INTO sentiment_hourly 
-      (hour, avg_sentiment, post_count, comment_count, weighted_sentiment)
-      VALUES (?, ?, ?, ?, ?)
+      (hour, platform_id, avg_sentiment, post_count, comment_count, weighted_sentiment)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
     
     await hourlyStmt.bind(
       currentHour,
+      platformId,
       posts.reduce((sum, p) => sum + p.sentiment, 0) / posts.length || 0.5,
       posts.length,
       comments.length,
