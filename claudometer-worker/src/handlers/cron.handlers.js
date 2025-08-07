@@ -166,16 +166,49 @@ async function warmEndpoint(env, endpoint, queryParams) {
     const url = queryParams ? `/${endpoint}?${queryParams}` : `/${endpoint}`;
     console.log(`Warming cache for: ${url}`);
     
-    // Import the handler dynamically to avoid circular imports
-    const { handleApiRequest } = await import('./api.handlers.js');
+    // Import the specific handler functions
+    const { 
+      getCurrentSentiment, 
+      getTimeSeriesData, 
+      getTopicData, 
+      getKeywordData, 
+      getRecentPosts, 
+      getPlatformData 
+    } = await import('./api.handlers.js');
     
-    // Create a mock request to warm the cache
-    const mockRequest = new Request(`https://api.claudometer.app${url}`, {
-      method: 'GET'
-    });
+    // Create a real URL object with the full URL
+    const fullUrl = new URL(`https://api.claudometer.app${url}`);
     
-    // Call the API handler to populate cache
-    await handleApiRequest(mockRequest, env, endpoint, queryParams);
+    // Call the appropriate handler function
+    let response;
+    switch (endpoint) {
+      case 'current-sentiment':
+        response = await getCurrentSentiment(env, fullUrl);
+        break;
+      case 'hourly-data':
+        response = await getTimeSeriesData(env, fullUrl);
+        break;
+      case 'topics':
+        response = await getTopicData(env, fullUrl);
+        break;
+      case 'keywords':
+        response = await getKeywordData(env, fullUrl);
+        break;
+      case 'recent-posts':
+        response = await getRecentPosts(env, fullUrl);
+        break;
+      case 'platforms':
+        response = await getPlatformData(env, fullUrl);
+        break;
+      default:
+        console.warn(`Unknown endpoint for cache warming: ${endpoint}`);
+        return;
+    }
+    
+    // Consume the response to ensure cache is populated
+    if (response && typeof response.text === 'function') {
+      await response.text();
+    }
     
   } catch (error) {
     console.error(`Error warming cache for ${endpoint}:`, error);
