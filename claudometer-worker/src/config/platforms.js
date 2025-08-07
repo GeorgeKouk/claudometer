@@ -16,8 +16,8 @@ export const CLAUDE_PLATFORM = {
   
   // Data collection settings
   collection: {
-    postsPerSubreddit: 15,
-    commentsPerPost: 5
+    postsPerSubreddit: 10,
+    commentsPerPost: 3
     // All collected posts and comments will be analyzed to ensure data consistency
   },
   
@@ -44,9 +44,9 @@ Example response: {"sentiment": 0.2, "topic": "Reliability", "keywords": ["crash
   
   // Rate limiting settings
   rateLimits: {
-    redditDelay: 2000,    // 2 seconds between requests
-    subredditDelay: 3000, // 3 seconds between subreddits
-    openaiDelay: 1000     // 1 second between OpenAI calls
+    redditDelay: 4000,    // 4 seconds between requests
+    subredditDelay: 8000, // 8 seconds between subreddits
+    openaiDelay: 1500     // 1.5 seconds between OpenAI calls
   }
 };
 
@@ -63,8 +63,8 @@ export const CHATGPT_PLATFORM = {
   
   // Data collection settings
   collection: {
-    postsPerSubreddit: 15,
-    commentsPerPost: 5
+    postsPerSubreddit: 10,
+    commentsPerPost: 3
     // All collected posts and comments will be analyzed to ensure data consistency
   },
   
@@ -91,9 +91,9 @@ Example response: {"sentiment": 0.8, "topic": "Features", "keywords": ["helpful"
   
   // Rate limiting settings
   rateLimits: {
-    redditDelay: 2500,    // 2.5 seconds between requests
-    subredditDelay: 3500, // 3.5 seconds between subreddits
-    openaiDelay: 1200     // 1.2 seconds between OpenAI calls
+    redditDelay: 5000,    // 5 seconds between requests
+    subredditDelay: 10000, // 10 seconds between subreddits
+    openaiDelay: 1800     // 1.8 seconds between OpenAI calls
   }
 };
 
@@ -110,8 +110,8 @@ export const GEMINI_PLATFORM = {
   
   // Data collection settings
   collection: {
-    postsPerSubreddit: 15,
-    commentsPerPost: 5
+    postsPerSubreddit: 10,
+    commentsPerPost: 3
     // All collected posts and comments will be analyzed to ensure data consistency
   },
   
@@ -138,9 +138,9 @@ Example response: {"sentiment": 0.6, "topic": "Integration", "keywords": ["works
   
   // Rate limiting settings
   rateLimits: {
-    redditDelay: 3000,    // 3 seconds between requests
-    subredditDelay: 4000, // 4 seconds between subreddits
-    openaiDelay: 1500     // 1.5 seconds between OpenAI calls
+    redditDelay: 6000,    // 6 seconds between requests
+    subredditDelay: 12000, // 12 seconds between subreddits
+    openaiDelay: 2000     // 2 seconds between OpenAI calls
   }
 };
 

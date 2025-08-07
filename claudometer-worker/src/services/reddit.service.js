@@ -3,8 +3,8 @@
  * Handles Reddit OAuth, post fetching, and comment retrieval
  */
 
-// Consistent User-Agent for all Reddit API requests
-const REDDIT_USER_AGENT = 'Claudometer/1.0.0 by /u/claudometer_bot';
+// Consistent User-Agent for all Reddit API requests (following Reddit's required format)
+const REDDIT_USER_AGENT = 'CloudFlare-Worker:Claudometer:2.0 (by /u/claudometer_bot)';
 
 /**
  * Gets an OAuth access token for Reddit API
@@ -27,10 +27,16 @@ export async function getRedditAccessToken(env) {
   
   if (!response.ok) {
     const errorBody = await response.text();
+    const rateLimitHeaders = {
+      used: response.headers.get('X-Ratelimit-Used'),
+      remaining: response.headers.get('X-Ratelimit-Remaining'),
+      reset: response.headers.get('X-Ratelimit-Reset')
+    };
     console.error('Reddit auth failed:', {
       status: response.status,
       statusText: response.statusText, 
-      body: errorBody
+      body: errorBody,
+      rateLimitHeaders
     });
     throw new Error(`Reddit auth failed: ${response.status}`);
   }
@@ -87,7 +93,16 @@ export async function fetchRedditPosts(env, platformConfig = null, subreddits = 
       });
 
       if (!response.ok) {
-        console.error(`Reddit error for r/${subreddit}: ${response.status}`);
+        const rateLimitHeaders = {
+          used: response.headers.get('X-Ratelimit-Used'),
+          remaining: response.headers.get('X-Ratelimit-Remaining'),
+          reset: response.headers.get('X-Ratelimit-Reset')
+        };
+        console.error(`Reddit error for r/${subreddit}:`, {
+          status: response.status,
+          statusText: response.statusText,
+          rateLimitHeaders
+        });
         continue;
       }
 
@@ -175,6 +190,17 @@ export async function fetchRedditPosts(env, platformConfig = null, subreddits = 
               console.log(`Found ${comments.length} comments for post ${post.id}, ${newComments.length} are new`);
               allComments.push(...newComments);
             }
+          } else {
+            const rateLimitHeaders = {
+              used: commentsResponse.headers.get('X-Ratelimit-Used'),
+              remaining: commentsResponse.headers.get('X-Ratelimit-Remaining'),
+              reset: commentsResponse.headers.get('X-Ratelimit-Reset')
+            };
+            console.error(`Reddit error fetching comments for post ${post.id}:`, {
+              status: commentsResponse.status,
+              statusText: commentsResponse.statusText,
+              rateLimitHeaders
+            });
           }
         } catch (commentError) {
           console.error(`Error fetching comments for ${post.id}:`, commentError.message);
