@@ -4,7 +4,7 @@
  */
 
 // Consistent User-Agent for all Reddit API requests (following Reddit's required format)
-const REDDIT_USER_AGENT = 'CloudFlare-Worker:Claudometer:2.0 (by /u/claudometer_bot)';
+const REDDIT_USER_AGENT = 'CloudFlare-Worker:claudometer:2.0 (by /u/claudometer_bot)';
 
 /**
  * Gets an OAuth access token for Reddit API
