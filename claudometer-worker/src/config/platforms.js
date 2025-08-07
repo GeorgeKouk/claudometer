@@ -220,15 +220,6 @@ export function validatePlatformConfig(config) {
   return true;
 }
 
-/**
- * Gets platform-specific Reddit User-Agent string
- * @param {string} platformId - Platform identifier
- * @returns {string} User-Agent string for Reddit API
- */
-export function getPlatformUserAgent(platformId = DEFAULT_PLATFORM) {
-  const config = getPlatformConfig(platformId);
-  return `${config.name}Monitor/1.0.0 by /u/claudometer_bot`;
-}
 
 // Validate all platform configurations on load
 try {

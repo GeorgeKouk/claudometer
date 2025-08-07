@@ -3,6 +3,9 @@
  * Handles Reddit OAuth, post fetching, and comment retrieval
  */
 
+// Consistent User-Agent for all Reddit API requests
+const REDDIT_USER_AGENT = 'Claudometer/1.0.0 by /u/claudometer_bot';
+
 /**
  * Gets an OAuth access token for Reddit API
  * @param {Object} env - Cloudflare Workers environment with Reddit credentials
@@ -17,7 +20,7 @@ export async function getRedditAccessToken(env) {
     headers: {
       'Authorization': `Basic ${auth}`,
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
+      'User-Agent': REDDIT_USER_AGENT
     },
     body: 'grant_type=client_credentials'
   });
@@ -79,7 +82,7 @@ export async function fetchRedditPosts(env, platformConfig = null, subreddits = 
       const response = await fetch(`https://oauth.reddit.com/r/${subreddit}/top?t=hour&limit=${collection.postsPerSubreddit}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
+          'User-Agent': REDDIT_USER_AGENT
         }
       });
 
@@ -129,7 +132,7 @@ export async function fetchRedditPosts(env, platformConfig = null, subreddits = 
             {
               headers: {
                 'Authorization': `Bearer ${accessToken}`,
-                'User-Agent': 'Claudometer/1.0.0 by /u/claudometer_bot'
+                'User-Agent': REDDIT_USER_AGENT
               }
             }
           );
