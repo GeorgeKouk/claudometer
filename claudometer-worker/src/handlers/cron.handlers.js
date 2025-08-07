@@ -52,9 +52,8 @@ export async function collectRedditData(env, platformId = DEFAULT_PLATFORM, subr
     // Store both in database with platform_id
     await storeInDatabase(analyzedPosts, analyzedComments, env, platformConfig.id);
     
-    // Clear all caches after new data collection
-    await clearCachePattern('', env); // Clear all claudometer cache entries
-    console.log('Cache cleared after data collection');
+    // Cache will be refreshed at 0:00 every hour - no manual clearing needed
+    console.log('Data collection completed - cache refresh scheduled for next hour');
     
     return new Response(`Collection completed: ${analyzedPosts.length} posts, ${analyzedComments.length} comments processed`);
   } catch (error) {
@@ -115,4 +114,71 @@ export async function collectAllPlatformsData(env) {
   }
   
   return new Response(`Multi-platform collection completed:\n${results.join('\n')}`);
+}
+
+/**
+ * Warm all cache keys by making internal API calls
+ * Runs at :45 minutes to refresh cache before next hour's data collection
+ */
+export async function warmCache(env) {
+  try {
+    console.log('Starting cache warming...');
+    
+    // List of all API endpoints to warm
+    const endpoints = [
+      'current-sentiment',
+      'hourly-data', 
+      'topics',
+      'keywords',
+      'recent-posts',
+      'platforms'
+    ];
+    
+    const periods = ['24h']; // Main period used by frontend
+    
+    // Warm cache for each endpoint
+    const promises = [];
+    for (const endpoint of endpoints) {
+      if (endpoint === 'platforms') {
+        // Platforms doesn't use period parameter
+        promises.push(warmEndpoint(env, endpoint, ''));
+      } else {
+        // Warm with default period
+        promises.push(warmEndpoint(env, endpoint, `period=${periods[0]}`));
+      }
+    }
+    
+    await Promise.all(promises);
+    console.log('Cache warming completed successfully');
+    
+    return new Response('Cache warmed successfully');
+  } catch (error) {
+    console.error('Cache warming error:', error);
+    return new Response(`Cache warming error: ${error.message}`, { status: 500 });
+  }
+}
+
+/**
+ * Helper function to warm a specific endpoint
+ */
+async function warmEndpoint(env, endpoint, queryParams) {
+  try {
+    const url = queryParams ? `/${endpoint}?${queryParams}` : `/${endpoint}`;
+    console.log(`Warming cache for: ${url}`);
+    
+    // Import the handler dynamically to avoid circular imports
+    const { handleApiRequest } = await import('./api.handlers.js');
+    
+    // Create a mock request to warm the cache
+    const mockRequest = new Request(`https://api.claudometer.app${url}`, {
+      method: 'GET'
+    });
+    
+    // Call the API handler to populate cache
+    await handleApiRequest(mockRequest, env, endpoint, queryParams);
+    
+  } catch (error) {
+    console.error(`Error warming cache for ${endpoint}:`, error);
+    // Don't throw - continue warming other endpoints
+  }
 }

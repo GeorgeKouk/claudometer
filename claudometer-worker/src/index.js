@@ -141,6 +141,12 @@ export default {
         platform = CHATGPT_PLATFORM;
       } else if (minutes >= 30 && minutes < 45) {
         platform = GEMINI_PLATFORM;
+      } else if (minutes >= 45) {
+        // Cache warming at :45 minutes
+        console.log(`Starting cache warming at ${currentTime.toISOString()}`);
+        const { warmCache } = await import('./handlers/cron.handlers.js');
+        ctx.waitUntil(warmCache(env));
+        return;
       }
       
       if (platform) {
