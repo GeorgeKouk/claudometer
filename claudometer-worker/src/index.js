@@ -16,7 +16,7 @@ import { analyzeWithOpenAI } from './services/ai.service.js';
 
 // Import handler functions
 import { getCurrentSentiment, getTimeSeriesData, getTopicData, getKeywordData, getRecentPosts, getPlatformData } from './handlers/api.handlers.js';
-import { getDevPosts, reevaluateSentiments, rollbackSentiments, getEventsAdmin, getDevEvents, createEvent, updateEvent, deleteEvent, clearCache } from './handlers/dev.handlers.js';
+import { getDevPosts, reevaluateSentiments, rollbackSentiments, getEventsAdmin, getDevEvents, createEvent, updateEvent, deleteEvent, clearCache, manualCollectClaude, manualCollectChatGPT, manualCollectGemini, manualCollectAllPlatforms, manualCollectPlatform } from './handlers/dev.handlers.js';
 import { collectRedditData } from './handlers/cron.handlers.js';
 import { CLAUDE_PLATFORM, CHATGPT_PLATFORM, GEMINI_PLATFORM } from './config/platforms.js';
 
@@ -33,7 +33,7 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // Rate limiting: 20 requests per hour per IP
+    // Rate limiting: 120 requests per hour per IP
     const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
     const rateLimitKey = `rate_limit:${clientIP}`;
     
@@ -41,10 +41,10 @@ export default {
       const requestCount = await env.CLAUDOMETER_CACHE.get(rateLimitKey);
       const currentCount = requestCount ? parseInt(requestCount) : 0;
       
-      if (currentCount >= 20) {
+      if (currentCount >= 120) {
         return new Response(JSON.stringify({ 
           error: 'Rate limit exceeded', 
-          message: 'Maximum 20 requests per hour allowed' 
+          message: 'Maximum 120 requests per hour allowed' 
         }), { 
           status: 429, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -101,6 +101,18 @@ export default {
         }
       } else if (path === '/dev/clear-cache' && env.DEV_MODE_ENABLED === 'true') {
         return await clearCache(env);
+      
+      // Manual data collection endpoints (DEV mode only)
+      } else if (path === '/dev/collect/claude' && env.DEV_MODE_ENABLED === 'true') {
+        return await manualCollectClaude(env);
+      } else if (path === '/dev/collect/chatgpt' && env.DEV_MODE_ENABLED === 'true') {
+        return await manualCollectChatGPT(env);
+      } else if (path === '/dev/collect/gemini' && env.DEV_MODE_ENABLED === 'true') {
+        return await manualCollectGemini(env);
+      } else if (path === '/dev/collect/all' && env.DEV_MODE_ENABLED === 'true') {
+        return await manualCollectAllPlatforms(env);
+      } else if (path === '/dev/collect' && env.DEV_MODE_ENABLED === 'true') {
+        return await manualCollectPlatform(env, url);
       } else if (path === '/') {
         return new Response('Claudometer API is running!', { headers: corsHeaders });
       }
@@ -117,22 +129,26 @@ export default {
 
   // Cron trigger for hourly data collection
   async scheduled(event, env, ctx) {
-    const currentTime = new Date();
-    const minutes = currentTime.getMinutes();
-    
-    // Determine which platform to collect data for based on cron schedule
-    let platform = null;
-    if (minutes >= 0 && minutes < 15) {
-      platform = CLAUDE_PLATFORM;
-    } else if (minutes >= 15 && minutes < 30) {
-      platform = CHATGPT_PLATFORM;
-    } else if (minutes >= 30 && minutes < 45) {
-      platform = GEMINI_PLATFORM;
-    }
-    
-    if (platform) {
-      console.log(`Collecting data for ${platform.name} at ${currentTime.toISOString()}`);
-      ctx.waitUntil(collectRedditData(env, platform.id));
+    try {
+      const currentTime = new Date();
+      const minutes = currentTime.getMinutes();
+      
+      // Determine which platform to collect data for based on cron schedule
+      let platform = null;
+      if (minutes >= 0 && minutes < 15) {
+        platform = CLAUDE_PLATFORM;
+      } else if (minutes >= 15 && minutes < 30) {
+        platform = CHATGPT_PLATFORM;
+      } else if (minutes >= 30 && minutes < 45) {
+        platform = GEMINI_PLATFORM;
+      }
+      
+      if (platform) {
+        console.log(`Collecting data for ${platform.name} at ${currentTime.toISOString()}`);
+        ctx.waitUntil(collectRedditData(env, platform.id));
+      }
+    } catch (error) {
+      console.error('Scheduled job error:', error);
     }
   }
 };

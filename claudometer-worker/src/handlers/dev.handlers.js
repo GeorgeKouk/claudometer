@@ -8,6 +8,8 @@ import { clearCachePattern } from '../services/cache.service.js';
 import { analyzeWithOpenAI } from '../services/ai.service.js';
 import { getCorsHeaders } from '../utils/cors.js';
 import { getTruncatedText } from '../utils/helpers.js';
+// Import cron handlers for manual collection
+import { collectRedditData, collectClaudeData, collectChatGPTData, collectGeminiData, collectAllPlatformsData } from './cron.handlers.js';
 
 /**
  * Gets posts and comments for debugging/reevaluation
@@ -253,6 +255,179 @@ export async function clearCache(env) {
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Manual data collection endpoints (DEV mode only)
+ */
+
+/**
+ * Manually collect data for Claude platform
+ */
+export async function manualCollectClaude(env) {
+  try {
+    const result = await collectClaudeData(env);
+    const resultText = await result.text();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      platform: 'claude',
+      message: resultText
+    }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ 
+      success: false,
+      platform: 'claude',
+      error: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Manually collect data for ChatGPT platform
+ */
+export async function manualCollectChatGPT(env) {
+  try {
+    const result = await collectChatGPTData(env);
+    const resultText = await result.text();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      platform: 'chatgpt',
+      message: resultText
+    }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ 
+      success: false,
+      platform: 'chatgpt',
+      error: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Manually collect data for Gemini platform
+ */
+export async function manualCollectGemini(env) {
+  try {
+    const result = await collectGeminiData(env);
+    const resultText = await result.text();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      platform: 'gemini',
+      message: resultText
+    }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ 
+      success: false,
+      platform: 'gemini',
+      error: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Manually collect data for all platforms
+ */
+export async function manualCollectAllPlatforms(env) {
+  try {
+    const result = await collectAllPlatformsData(env);
+    const resultText = await result.text();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      platform: 'all',
+      message: resultText
+    }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ 
+      success: false,
+      platform: 'all',
+      error: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  }
+}
+
+/**
+ * Manually collect data for a specific platform via URL parameter
+ */
+export async function manualCollectPlatform(env, url) {
+  try {
+    const platform = url.searchParams.get('platform');
+    
+    if (!platform) {
+      return new Response(JSON.stringify({ 
+        error: 'Platform parameter required',
+        usage: 'Use ?platform=claude|chatgpt|gemini|all'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+      });
+    }
+
+    let result;
+    switch (platform.toLowerCase()) {
+      case 'claude':
+        result = await collectClaudeData(env);
+        break;
+      case 'chatgpt':
+        result = await collectChatGPTData(env);
+        break;
+      case 'gemini':
+        result = await collectGeminiData(env);
+        break;
+      case 'all':
+        result = await collectAllPlatformsData(env);
+        break;
+      default:
+        return new Response(JSON.stringify({ 
+          error: 'Invalid platform',
+          usage: 'Use ?platform=claude|chatgpt|gemini|all'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+        });
+    }
+    
+    const resultText = await result.text();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      platform: platform,
+      message: resultText
+    }), {
+      headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: error.message 
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
     });

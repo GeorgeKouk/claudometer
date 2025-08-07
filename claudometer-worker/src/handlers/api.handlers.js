@@ -177,10 +177,10 @@ export async function getTimeSeriesData(env, url) {
 }
 
 /**
- * Gets topic distribution data aggregated across all platforms
+ * Gets topic distribution data - grouped by platform by default, single platform if specified
  * @param {Object} env - Cloudflare Workers environment
  * @param {URL} url - Request URL with query parameters
- * @returns {Response} JSON response with topic breakdown across all platforms
+ * @returns {Response} JSON response with topic breakdown by platform or single platform array
  */
 export async function getTopicData(env, url) {
   try {
@@ -208,80 +208,157 @@ export async function getTopicData(env, url) {
     const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
     const dateFilter = period === 'all' ? '' : `AND processed_at > datetime("now", "-${daysBack} days")`;
     
-    // Add platform filter if specified
-    const platformFilter = platform ? `AND platform_id = '${platform}'` : '';
-    
-    // Get topics from category field with post/comment counts and weighted sentiment (multi-platform aware)
-    const postsStmt = env.DB.prepare(`SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE category IS NOT NULL ${dateFilter} ${platformFilter} GROUP BY category`);
-    const commentsStmt = env.DB.prepare(`SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE category IS NOT NULL ${dateFilter} ${platformFilter} GROUP BY category`);
-    
-    const [postsResults, commentsResults] = await Promise.all([
-      postsStmt.all(),
-      commentsStmt.all()
-    ]);
-    
-    // Combine and weight the data (posts = 3x weight, comments = 1x weight)
-    const categoryMap = {};
-    
-    postsResults.results.forEach(row => {
-      categoryMap[row.category] = {
-        name: row.category,
-        totalSentiment: (row.avg_sentiment || 0.5) * row.count * 3,
-        totalWeight: row.count * 3,
-        count: row.count * 3, // Weight posts 3x for display
-        actualCount: row.count // Unweighted count for reference count
-      };
-    });
-    
-    commentsResults.results.forEach(row => {
-      if (categoryMap[row.category]) {
-        categoryMap[row.category].totalSentiment += (row.avg_sentiment || 0.5) * row.count;
-        categoryMap[row.category].totalWeight += row.count;
-        categoryMap[row.category].count += row.count;
-        categoryMap[row.category].actualCount += row.count; // Add unweighted count
-      } else {
+    // Single platform request - return array format (existing logic)
+    if (platform) {
+      // Get topics from category field with post/comment counts and weighted sentiment
+      const postsQuery = `SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE category IS NOT NULL ${dateFilter} AND platform_id = ? GROUP BY category`;
+      const commentsQuery = `SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE category IS NOT NULL ${dateFilter} AND platform_id = ? GROUP BY category`;
+      
+      const postsStmt = env.DB.prepare(postsQuery);
+      const commentsStmt = env.DB.prepare(commentsQuery);
+      
+      const [postsResults, commentsResults] = await Promise.all([
+        postsStmt.bind(platform).all(),
+        commentsStmt.bind(platform).all()
+      ]);
+      
+      // Combine and weight the data (posts = 3x weight, comments = 1x weight)
+      const categoryMap = {};
+      
+      postsResults.results.forEach(row => {
         categoryMap[row.category] = {
           name: row.category,
-          totalSentiment: (row.avg_sentiment || 0.5) * row.count,
-          totalWeight: row.count,
-          count: row.count,
-          actualCount: row.count // Unweighted count for reference count
+          totalSentiment: (row.avg_sentiment || 0.5) * row.count * 3,
+          totalWeight: row.count * 3,
+          count: row.count * 3,
+          actualCount: row.count
         };
-      }
-    });
+      });
+      
+      commentsResults.results.forEach(row => {
+        if (categoryMap[row.category]) {
+          categoryMap[row.category].totalSentiment += (row.avg_sentiment || 0.5) * row.count;
+          categoryMap[row.category].totalWeight += row.count;
+          categoryMap[row.category].count += row.count;
+          categoryMap[row.category].actualCount += row.count;
+        } else {
+          categoryMap[row.category] = {
+            name: row.category,
+            totalSentiment: (row.avg_sentiment || 0.5) * row.count,
+            totalWeight: row.count,
+            count: row.count,
+            actualCount: row.count
+          };
+        }
+      });
+      
+      const total = Object.values(categoryMap).reduce((sum, cat) => sum + cat.count, 0);
+      
+      const topicData = await Promise.all(
+        Object.values(categoryMap).map(async cat => ({
+          name: cat.name,
+          value: total > 0 ? Math.round((cat.count / total) * 100) : 0,
+          sentiment: cat.totalWeight > 0 ? cat.totalSentiment / cat.totalWeight : 0.5,
+          color: await getTopicColor(cat.name, env),
+          referenceCount: cat.actualCount
+        }))
+      );
+      
+      await setCache(cacheKey, topicData, env);
+      
+      return new Response(JSON.stringify(topicData), {
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
+      });
+    }
     
-    const total = Object.values(categoryMap).reduce((sum, cat) => sum + cat.count, 0);
+    // Multi-platform request - return platform-grouped object
+    // Get available platforms
+    const platformsResult = await env.DB.prepare('SELECT id FROM platforms WHERE active = 1 ORDER BY id').all();
+    const platforms = platformsResult.results.map(p => p.id);
     
-    // Get colors for each topic
-    const topicData = await Promise.all(
-      Object.values(categoryMap).map(async cat => ({
-        name: cat.name,
-        value: total > 0 ? Math.round((cat.count / total) * 100) : 0,
-        sentiment: cat.totalWeight > 0 ? cat.totalSentiment / cat.totalWeight : 0.5,
-        color: await getTopicColor(cat.name, env),
-        referenceCount: cat.actualCount
-      }))
-    );
+    const platformData = {};
+    
+    // Get data for each platform
+    for (const platformId of platforms) {
+      const postsQuery = `SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM posts WHERE category IS NOT NULL ${dateFilter} AND platform_id = ? GROUP BY category`;
+      const commentsQuery = `SELECT category, COUNT(*) as count, AVG(sentiment) as avg_sentiment FROM comments WHERE category IS NOT NULL ${dateFilter} AND platform_id = ? GROUP BY category`;
+      
+      const postsStmt = env.DB.prepare(postsQuery);
+      const commentsStmt = env.DB.prepare(commentsQuery);
+      
+      const [postsResults, commentsResults] = await Promise.all([
+        postsStmt.bind(platformId).all(),
+        commentsStmt.bind(platformId).all()
+      ]);
+      
+      // Combine and weight the data for this platform
+      const categoryMap = {};
+      
+      postsResults.results.forEach(row => {
+        categoryMap[row.category] = {
+          name: row.category,
+          totalSentiment: (row.avg_sentiment || 0.5) * row.count * 3,
+          totalWeight: row.count * 3,
+          count: row.count * 3,
+          actualCount: row.count
+        };
+      });
+      
+      commentsResults.results.forEach(row => {
+        if (categoryMap[row.category]) {
+          categoryMap[row.category].totalSentiment += (row.avg_sentiment || 0.5) * row.count;
+          categoryMap[row.category].totalWeight += row.count;
+          categoryMap[row.category].count += row.count;
+          categoryMap[row.category].actualCount += row.count;
+        } else {
+          categoryMap[row.category] = {
+            name: row.category,
+            totalSentiment: (row.avg_sentiment || 0.5) * row.count,
+            totalWeight: row.count,
+            count: row.count,
+            actualCount: row.count
+          };
+        }
+      });
+      
+      const total = Object.values(categoryMap).reduce((sum, cat) => sum + cat.count, 0);
+      
+      // Get top 10 topics for this platform
+      platformData[platformId] = await Promise.all(
+        Object.values(categoryMap)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10)
+          .map(async cat => ({
+            name: cat.name,
+            value: total > 0 ? Math.round((cat.count / total) * 100) : 0,
+            sentiment: cat.totalWeight > 0 ? cat.totalSentiment / cat.totalWeight : 0.5,
+            color: await getTopicColor(cat.name, env),
+            referenceCount: cat.actualCount
+          }))
+      );
+    }
     
     // Cache the result
-    await setCache(cacheKey, topicData, env);
+    await setCache(cacheKey, platformData, env);
     
-    return new Response(JSON.stringify(topicData), {
+    return new Response(JSON.stringify(platformData), {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
     console.error('Error in getTopicData:', error);
-    return new Response(JSON.stringify([]), {
+    // Return empty platform structure for fallback
+    const fallback = platform ? [] : { claude: [], chatgpt: [], gemini: [] };
+    return new Response(JSON.stringify(fallback), {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
 }
 
 /**
- * Gets trending keywords data aggregated across all platforms
+ * Gets trending keywords data - grouped by platform by default, single platform if specified
  * @param {Object} env - Cloudflare Workers environment
  * @param {URL} url - Request URL with query parameters
- * @returns {Response} JSON response with keyword analysis across all platforms
+ * @returns {Response} JSON response with keyword analysis by platform or single platform array
  */
 export async function getKeywordData(env, url) {
   try {
@@ -309,89 +386,180 @@ export async function getKeywordData(env, url) {
     const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
     const dateFilter = period === 'all' ? '' : `AND processed_at > datetime("now", "-${daysBack} days")`;
     
-    // Add platform filter if specified
-    const platformFilter = platform ? `AND platform_id = '${platform}'` : '';
-    
-    // Get keywords from both posts and comments - strict count basis (no weighting for counts)
-    const postsStmt = env.DB.prepare(`SELECT keywords, sentiment FROM posts WHERE keywords IS NOT NULL ${dateFilter} ${platformFilter}`);
-    const commentsStmt = env.DB.prepare(`SELECT keywords, sentiment FROM comments WHERE keywords IS NOT NULL ${dateFilter} ${platformFilter}`);
-    
-    const [postsResults, commentsResults] = await Promise.all([
-      postsStmt.all(),
-      commentsStmt.all()
-    ]);
-    
-    const keywordCounts = {};
-    const keywordSentiments = {};
-    
-    // Process posts (1 count per occurrence, but weighted sentiment)
-    postsResults.results.forEach(row => {
-      if (row.keywords) {
-        try {
-          const keywords = JSON.parse(row.keywords);
-          keywords.forEach(keyword => {
-            keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1; // Strict count
-            keywordSentiments[keyword] = keywordSentiments[keyword] || [];
-            // Add sentiment 3 times for weighted sentiment calculation
-            keywordSentiments[keyword].push(row.sentiment, row.sentiment, row.sentiment);
-          });
-        } catch (e) {
-          // If keywords is not JSON, treat as comma-separated string
-          const keywords = row.keywords.split(',');
-          keywords.forEach(keyword => {
-            keyword = keyword.trim();
-            if (keyword) {
+    // Single platform request - return array format (existing logic)
+    if (platform) {
+      // Get keywords from both posts and comments
+      const postsQuery = `SELECT keywords, sentiment FROM posts WHERE keywords IS NOT NULL ${dateFilter} AND platform_id = ?`;
+      const commentsQuery = `SELECT keywords, sentiment FROM comments WHERE keywords IS NOT NULL ${dateFilter} AND platform_id = ?`;
+      
+      const postsStmt = env.DB.prepare(postsQuery);
+      const commentsStmt = env.DB.prepare(commentsQuery);
+      
+      const [postsResults, commentsResults] = await Promise.all([
+        postsStmt.bind(platform).all(),
+        commentsStmt.bind(platform).all()
+      ]);
+      
+      const keywordCounts = {};
+      const keywordSentiments = {};
+      
+      // Process posts (weighted sentiment)
+      postsResults.results.forEach(row => {
+        if (row.keywords) {
+          try {
+            const keywords = JSON.parse(row.keywords);
+            keywords.forEach(keyword => {
               keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
               keywordSentiments[keyword] = keywordSentiments[keyword] || [];
               keywordSentiments[keyword].push(row.sentiment, row.sentiment, row.sentiment);
-            }
-          });
+            });
+          } catch (e) {
+            const keywords = row.keywords.split(',');
+            keywords.forEach(keyword => {
+              keyword = keyword.trim();
+              if (keyword) {
+                keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+                keywordSentiments[keyword] = keywordSentiments[keyword] || [];
+                keywordSentiments[keyword].push(row.sentiment, row.sentiment, row.sentiment);
+              }
+            });
+          }
         }
-      }
-    });
-    
-    // Process comments (1 count per occurrence, 1x sentiment weight)
-    commentsResults.results.forEach(row => {
-      if (row.keywords) {
-        try {
-          const keywords = JSON.parse(row.keywords);
-          keywords.forEach(keyword => {
-            keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1; // Strict count
-            keywordSentiments[keyword] = keywordSentiments[keyword] || [];
-            keywordSentiments[keyword].push(row.sentiment);
-          });
-        } catch (e) {
-          // If keywords is not JSON, treat as comma-separated string
-          const keywords = row.keywords.split(',');
-          keywords.forEach(keyword => {
-            keyword = keyword.trim();
-            if (keyword) {
+      });
+      
+      // Process comments (1x sentiment weight)
+      commentsResults.results.forEach(row => {
+        if (row.keywords) {
+          try {
+            const keywords = JSON.parse(row.keywords);
+            keywords.forEach(keyword => {
               keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
               keywordSentiments[keyword] = keywordSentiments[keyword] || [];
               keywordSentiments[keyword].push(row.sentiment);
-            }
-          });
+            });
+          } catch (e) {
+            const keywords = row.keywords.split(',');
+            keywords.forEach(keyword => {
+              keyword = keyword.trim();
+              if (keyword) {
+                keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+                keywordSentiments[keyword] = keywordSentiments[keyword] || [];
+                keywordSentiments[keyword].push(row.sentiment);
+              }
+            });
+          }
         }
-      }
-    });
+      });
+      
+      const keywordData = Object.entries(keywordCounts)
+        .map(([keyword, count]) => ({
+          keyword,
+          count,
+          sentiment: keywordSentiments[keyword].reduce((sum, s) => sum + s, 0) / keywordSentiments[keyword].length
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20);
+      
+      await setCache(cacheKey, keywordData, env);
+      
+      return new Response(JSON.stringify(keywordData), {
+        headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
+      });
+    }
     
-    const keywordData = Object.entries(keywordCounts)
-      .map(([keyword, count]) => ({
-        keyword,
-        count, // Actual occurrence count
-        sentiment: keywordSentiments[keyword].reduce((sum, s) => sum + s, 0) / keywordSentiments[keyword].length
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
+    // Multi-platform request - return platform-grouped object
+    // Get available platforms
+    const platformsResult = await env.DB.prepare('SELECT id FROM platforms WHERE active = 1 ORDER BY id').all();
+    const platforms = platformsResult.results.map(p => p.id);
+    
+    const platformData = {};
+    
+    // Get data for each platform
+    for (const platformId of platforms) {
+      const postsQuery = `SELECT keywords, sentiment FROM posts WHERE keywords IS NOT NULL ${dateFilter} AND platform_id = ?`;
+      const commentsQuery = `SELECT keywords, sentiment FROM comments WHERE keywords IS NOT NULL ${dateFilter} AND platform_id = ?`;
+      
+      const postsStmt = env.DB.prepare(postsQuery);
+      const commentsStmt = env.DB.prepare(commentsQuery);
+      
+      const [postsResults, commentsResults] = await Promise.all([
+        postsStmt.bind(platformId).all(),
+        commentsStmt.bind(platformId).all()
+      ]);
+      
+      const keywordCounts = {};
+      const keywordSentiments = {};
+      
+      // Process posts for this platform (weighted sentiment)
+      postsResults.results.forEach(row => {
+        if (row.keywords) {
+          try {
+            const keywords = JSON.parse(row.keywords);
+            keywords.forEach(keyword => {
+              keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+              keywordSentiments[keyword] = keywordSentiments[keyword] || [];
+              keywordSentiments[keyword].push(row.sentiment, row.sentiment, row.sentiment);
+            });
+          } catch (e) {
+            const keywords = row.keywords.split(',');
+            keywords.forEach(keyword => {
+              keyword = keyword.trim();
+              if (keyword) {
+                keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+                keywordSentiments[keyword] = keywordSentiments[keyword] || [];
+                keywordSentiments[keyword].push(row.sentiment, row.sentiment, row.sentiment);
+              }
+            });
+          }
+        }
+      });
+      
+      // Process comments for this platform (1x sentiment weight)  
+      commentsResults.results.forEach(row => {
+        if (row.keywords) {
+          try {
+            const keywords = JSON.parse(row.keywords);
+            keywords.forEach(keyword => {
+              keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+              keywordSentiments[keyword] = keywordSentiments[keyword] || [];
+              keywordSentiments[keyword].push(row.sentiment);
+            });
+          } catch (e) {
+            const keywords = row.keywords.split(',');
+            keywords.forEach(keyword => {
+              keyword = keyword.trim();
+              if (keyword) {
+                keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+                keywordSentiments[keyword] = keywordSentiments[keyword] || [];
+                keywordSentiments[keyword].push(row.sentiment);
+              }
+            });
+          }
+        }
+      });
+      
+      // Get top 15 keywords for this platform
+      platformData[platformId] = Object.entries(keywordCounts)
+        .map(([keyword, count]) => ({
+          keyword,
+          count,
+          sentiment: keywordSentiments[keyword].reduce((sum, s) => sum + s, 0) / keywordSentiments[keyword].length
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15);
+    }
     
     // Cache the result
-    await setCache(cacheKey, keywordData, env);
+    await setCache(cacheKey, platformData, env);
     
-    return new Response(JSON.stringify(keywordData), {
+    return new Response(JSON.stringify(platformData), {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   } catch (error) {
-    return new Response(JSON.stringify([]), {
+    console.error('Error in getKeywordData:', error);
+    // Return empty platform structure for fallback
+    const fallback = platform ? [] : { claude: [], chatgpt: [], gemini: [] };
+    return new Response(JSON.stringify(fallback), {
       headers: addCacheHeaders({ 'Content-Type': 'application/json', ...getCorsHeaders(env) })
     });
   }
@@ -429,17 +597,18 @@ export async function getRecentPosts(env, url) {
     const daysBack = period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 365;
     const dateFilter = period === 'all' ? '' : `processed_at > datetime("now", "-${daysBack} days")`;
     
-    // Add platform filter if specified
-    const platformFilter = platform ? `platform_id = '${platform}'` : '';
-    
-    // Combine filters
+    // Build WHERE clause dynamically
     let whereClause = '';
-    if (dateFilter && platformFilter) {
-      whereClause = `WHERE ${dateFilter} AND ${platformFilter}`;
+    let bindings = [];
+    
+    if (dateFilter && platform) {
+      whereClause = `WHERE ${dateFilter} AND platform_id = ?`;
+      bindings = [platform];
     } else if (dateFilter) {
       whereClause = `WHERE ${dateFilter}`;
-    } else if (platformFilter) {
-      whereClause = `WHERE ${platformFilter}`;
+    } else if (platform) {
+      whereClause = `WHERE platform_id = ?`;
+      bindings = [platform];
     }
     
     const stmt = env.DB.prepare(`
@@ -450,7 +619,7 @@ export async function getRecentPosts(env, url) {
       ${whereClause}
       ORDER BY posts.processed_at DESC LIMIT 10
     `);
-    const results = await stmt.all();
+    const results = bindings.length > 0 ? await stmt.bind(...bindings).all() : await stmt.all();
     
     const recentPosts = results.results.map((row, index) => ({
       id: index + 1,
@@ -497,7 +666,7 @@ export async function getPlatformData(env, url) {
     }
     
     // Get platform data from database
-    const stmt = env.DB.prepare('SELECT id, display_name, color, description, subreddits, active FROM platforms ORDER BY id');
+    const stmt = env.DB.prepare('SELECT id, display_name, color, description, subreddits, active, icon FROM platforms ORDER BY id');
     const results = await stmt.all();
     
     const platforms = results.results.map(row => ({
@@ -506,7 +675,8 @@ export async function getPlatformData(env, url) {
       color: row.color,
       description: row.description,
       subreddits: JSON.parse(row.subreddits || '[]'),
-      active: Boolean(row.active)
+      active: Boolean(row.active),
+      icon: row.icon
     }));
     
     // Cache the result (platforms change rarely)
@@ -696,31 +866,27 @@ async function getDailyAggregatedDataUncached(env, period) {
 
 async function getMultiPlatformHourlyDataUncached(env) {
   try {
-    // Calculate 24 hours ago in UTC to match our stored timestamps
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000)).toISOString();
-    
     // Get available platforms
     const platformsResult = await env.DB.prepare('SELECT id, display_name, color FROM platforms WHERE active = 1 ORDER BY id').all();
     const platforms = platformsResult.results;
     
-    // Get data for all platforms for the last 24 hours
+    // Get data for all platforms for the last 24 hours - use SQLite native datetime
     const stmt = env.DB.prepare(`
       SELECT hour, platform_id, weighted_sentiment, post_count, comment_count 
       FROM sentiment_hourly 
-      WHERE hour >= ?
+      WHERE hour >= datetime('now', '-24 hours')
       ORDER BY hour ASC, platform_id ASC
     `);
-    const results = await stmt.bind(twentyFourHoursAgo).all();
+    const results = await stmt.all();
     
     // Get events for the last 24 hours (platform-agnostic events for now)
     const eventsStmt = env.DB.prepare(`
       SELECT id, title, description, event_date, event_type, url
       FROM events 
-      WHERE event_date >= datetime(?, '-2 hours') AND event_date <= datetime('now', '+2 hours')
+      WHERE event_date >= datetime('now', '-24 hours') AND event_date <= datetime('now', '+2 hours')
       ORDER BY event_date ASC
     `);
-    const eventsResults = await eventsStmt.bind(twentyFourHoursAgo).all();
+    const eventsResults = await eventsStmt.all();
     
     // Transform events data
     const events = eventsResults.results.map(row => ({

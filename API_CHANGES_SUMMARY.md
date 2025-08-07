@@ -22,7 +22,7 @@ The Claudometer API has been updated to support multiple AI platforms (Claude, C
 ```json
 {
   "claude": {
-    "display_name": "Claude AI",
+    "display_name": "Claude",
     "color": "#8B4513",
     "latest_sentiment": 0.75,
     "avg_sentiment": 0.72,
@@ -42,7 +42,7 @@ The Claudometer API has been updated to support multiple AI platforms (Claude, C
     "avg_comment_count": 280
   },
   "gemini": {
-    "display_name": "Google Gemini",
+    "display_name": "Gemini",
     "color": "#4285F4",
     "latest_sentiment": 0.71,
     "avg_sentiment": 0.69,
@@ -103,7 +103,7 @@ The Claudometer API has been updated to support multiple AI platforms (Claude, C
   "platforms": [
     {
       "id": "claude",
-      "name": "Claude AI", 
+      "name": "Claude", 
       "color": "#8B4513"
     },
     {
@@ -113,7 +113,7 @@ The Claudometer API has been updated to support multiple AI platforms (Claude, C
     },
     {
       "id": "gemini",
-      "name": "Google Gemini",
+      "name": "Gemini",
       "color": "#4285F4"
     }
   ]
@@ -147,7 +147,7 @@ The Claudometer API has been updated to support multiple AI platforms (Claude, C
     "time": "2h ago",
     "platform": {
       "id": "claude",
-      "name": "Claude AI",
+      "name": "Claude",
       "color": "#8B4513"
     }
   }
@@ -169,11 +169,12 @@ The Claudometer API has been updated to support multiple AI platforms (Claude, C
 [
   {
     "id": "claude",
-    "name": "Claude AI", 
+    "name": "Claude", 
     "color": "#8B4513",
     "description": "Anthropic Claude AI assistant monitoring",
     "subreddits": ["Anthropic", "ClaudeAI", "ClaudeCode"],
-    "active": true
+    "active": true,
+    "icon": "/platform-logos/claude.webp"
   },
   {
     "id": "chatgpt",
@@ -181,23 +182,25 @@ The Claudometer API has been updated to support multiple AI platforms (Claude, C
     "color": "#10A37F", 
     "description": "OpenAI ChatGPT monitoring",
     "subreddits": ["ChatGPT", "OpenAI", "GPT4"],
-    "active": true
+    "active": true,
+    "icon": "/platform-logos/chatgpt.webp"
   },
   {
     "id": "gemini",
-    "name": "Google Gemini",
+    "name": "Gemini",
     "color": "#4285F4",
     "description": "Google Gemini AI monitoring", 
     "subreddits": ["GoogleAI", "Bard", "Gemini"],
-    "active": true
+    "active": true,
+    "icon": "/platform-logos/gemini.webp"
   }
 ]
 ```
 
-## Platform Colors
-- **Claude AI**: `#8B4513` (Brown)
-- **ChatGPT**: `#10A37F` (Green) 
-- **Gemini**: `#4285F4` (Blue)
+## Platform Colors & Icons
+- **Claude**: `#8B4513` (Brown) - `/platform-logos/claude.webp` (Diamond logo)
+- **ChatGPT**: `#10A37F` (Green) - `/platform-logos/chatgpt.webp` (Starburst logo)
+- **Gemini**: `#4285F4` (Blue) - `/platform-logos/gemini.webp` (Starburst logo)
 
 ## Query Parameters
 All endpoints support:
@@ -214,10 +217,34 @@ All endpoints support:
 2. **`/hourly-data`**: Returns `{data: [...], events: [...], platforms: [...]}` instead of array
 3. **`/recent-posts`**: Added `platform` object to each post
 
+## Frontend Platform Toggle Implementation
+The frontend now features client-side platform filtering:
+
+### Platform Toggle UI
+- **Toggle Controls**: Logo buttons between date controls and dashboard content
+- **Visual Design**: Platform icons with color-matching when unselected, white when selected
+- **Interaction**: Click to toggle platforms, minimum one platform required
+- **Icon Assets**: WebP logos stored in `public/platform-logos/` (240x240px)
+
+### Client-Side Data Processing
+- **Efficient API Usage**: Single API call per endpoint returns platform-grouped data
+- **Real-Time Filtering**: JavaScript aggregation based on selected platforms
+- **Topic Aggregation**: Combines topics with same name across selected platforms
+- **Keyword Aggregation**: Sums keyword counts across selected platforms
+- **Chart Integration**: Platform sentiment lines conditionally rendered
+- **Instant Updates**: All dashboard sections update simultaneously on toggle
+
+### Technical Implementation
+- **State Management**: `useState` for selected platforms array
+- **Data Processing**: `useMemo` hooks for performance-optimized aggregation
+- **CSS Masking**: Icons colored to match platform colors using CSS mask properties
+- **Chronological Ordering**: Chart data sorted by timestamp (oldest to newest)
+
 ## Migration Guide
 Frontend components need to be updated to:
 1. Handle new multi-platform response structures
 2. Iterate over platform keys in `/current-sentiment`
 3. Access `.data` array in `/hourly-data` responses
 4. Display platform information in recent posts
-5. Use platform colors for consistent UI theming
+5. Use platform colors and icons for consistent UI theming
+6. **NEW**: Implement client-side platform filtering and data aggregation

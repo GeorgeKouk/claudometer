@@ -1,7 +1,7 @@
 # Claudometer Project Summary
 
 ## Project Overview
-Built a real-time Reddit sentiment tracking dashboard for Claude AI mentions across r/Anthropic, r/ClaudeAI, and r/ClaudeCode.
+Built a real-time Reddit sentiment tracking dashboard for **multi-platform AI assistant monitoring** across Claude AI, ChatGPT, and Google Gemini. Tracks sentiment mentions across 9 subreddit communities with staggered data collection to optimize API usage.
 
 ## Architecture
 - **Backend**: Cloudflare Worker (API + data collection + KV caching)
@@ -33,34 +33,62 @@ Invalidation: Automatic after data collection
 See CLAUDE.md for current database schema and technical details.
 
 ### API Endpoints (All Cached for 55 Minutes)
+**Public API Endpoints (Rate Limited: 120 requests/hour per IP)**
 - `GET /` - Health check
-- `GET /current-sentiment` - Latest weighted sentiment (cached by period)
-- `GET /hourly-data` - 24h trend data (cached by period)
-- `GET /topics` - Topic breakdown (cached by period)
-- `GET /keywords` - Trending keywords (cached by period)
-- `GET /recent-posts` - Latest posts (cached by period)
-- `GET /collect-data` - Manual data collection (not cached)
-- `GET /dev/*` - Development endpoints (DEV_MODE_ENABLED=true required)
+- `GET /current-sentiment` - Multi-platform sentiment data (optional `?platform=claude|chatgpt|gemini` filter)
+- `GET /hourly-data` - Multi-platform time series with events (optional platform filter)
+- `GET /topics` - Topic breakdown across platforms (optional platform filter)
+- `GET /keywords` - Trending keywords analysis (optional platform filter)
+- `GET /recent-posts` - Recent posts feed (optional platform filter)
+- `GET /platforms` - Available platform metadata and configuration
 
-### Data Collection Process
-1. **Reddit OAuth**: Authenticates with Reddit API
-2. **Fetch Data**: 20 posts + 5 top comments per subreddit (3 subreddits = ~180 items)
-3. **OpenAI Analysis**: Sentiment analysis on 10 posts + 15 comments (cost control)
-4. **Weighted Scoring**: Posts = 3x weight, Comments = 1x weight (for sentiment only, not keywords)
-5. **Storage**: Separate tables for posts/comments + hourly aggregation
-6. **Scheduled**: Runs hourly via cron trigger
+**Development Endpoints (DEV_MODE_ENABLED=true required)**
+- `GET /dev/posts` - Debug posts data with filtering
+- `POST /dev/reevaluate` - Re-analyze sentiment for selected items
+- `POST /dev/rollback` - Rollback sentiment changes (TODO: implementation needed)
+- `GET /dev/events-admin` - Events management interface
+- `GET /dev/events` - List all events
+- `POST /dev/events` - Create new event
+- `PUT /dev/events/:id` - Update event (TODO: implementation needed)
+- `DELETE /dev/events/:id` - Delete event
+- `GET /dev/clear-cache` - Clear all cache entries
 
-### Key Functions Updated
-- `fetchRedditPosts()` - Now fetches posts + comments with OAuth
-- `analyzeWithOpenAI()` - Fixed to use `env.OPENAI_API_KEY` (not ANTHROPIC)
-- `storeInDatabase()` - Now handles both posts and comments separately
-- `getCurrentSentiment()` - Returns `weighted_sentiment` instead of `avg_sentiment`
-- **Cache Functions Added**:
-  - `getCacheKey()` - Generates consistent cache keys
-  - `getFromCache()` - Retrieves cached data with expiry validation
-  - `setCache()` - Stores data with timestamps
-  - `clearCachePattern()` - Clears cache entries after data collection
-  - `addCacheHeaders()` - Adds browser cache headers
+**⚠️ Rate Limiting Note**: Frontend requires 6 API calls per dashboard load. See [TODO.md](TODO.md) for planned `/dashboard` endpoint optimization.
+
+### Multi-Platform Data Collection Process
+**Staggered Collection Schedule (Per Hour):**
+- **0-15 minutes**: Claude AI data collection (r/Anthropic, r/ClaudeAI, r/ClaudeCode)
+- **15-30 minutes**: ChatGPT data collection (r/ChatGPT, r/OpenAI, r/GPT4)  
+- **30-45 minutes**: Google Gemini data collection (r/GoogleAI, r/Bard, r/Gemini)
+
+**Collection Process Per Platform:**
+1. **Reddit OAuth**: Authenticates with platform-specific User-Agent
+2. **Fetch Data**: 20 posts + 5 top comments per subreddit × 3 subreddits = ~75 posts + ~15 comments per platform
+3. **OpenAI Analysis**: Sentiment analysis on ALL fetched content (225 total items per hour across all platforms)
+4. **Platform-Specific Prompts**: Each platform uses tailored analysis prompts for accuracy
+5. **Weighted Scoring**: Posts = 3x weight, Comments = 1x weight (for sentiment calculations only)
+6. **Storage**: Separate tables for posts/comments with platform_id + hourly aggregation
+7. **Cache Invalidation**: Automatic cache clearing after successful data collection
+
+### Modular Architecture (Post-Refactoring)
+**Handler Modules:**
+- `api.handlers.js` - Multi-platform API endpoints with optional platform filtering
+- `dev.handlers.js` - Development tools and debugging endpoints
+- `cron.handlers.js` - Staggered multi-platform data collection logic
+
+**Service Modules:**
+- `cache.service.js` - KV cache management with dynamic TTL
+- `database.service.js` - Multi-platform database operations with platform_id support
+- `reddit.service.js` - Platform-aware Reddit API integration with OAuth
+- `ai.service.js` - Platform-specific OpenAI sentiment analysis with tailored prompts
+
+**Utility Modules:**
+- `cors.js` - Environment-based CORS header management
+- `helpers.js` - Time formatting and text utilities
+- `validation.js` - Input sanitization and output validation for security
+
+**Configuration:**
+- `platforms.js` - Platform definitions (Claude, ChatGPT, Gemini) with subreddits, prompts, schedules, and rate limits
 
 ## Frontend - Cloudflare Pages
 
@@ -80,11 +108,16 @@ npm run build
 # Deploy build/ folder to Pages
 ```
 
-### Key Frontend Changes
-- Uses `weighted_sentiment` from API
-- Displays both posts and comments data
-- Real-time updates every 1 hour, a few minutes after cron job runs (2-3 minutes timeline estimate)
-- Manual refresh and data collection buttons
+### Multi-Platform Frontend Features (**IMPLEMENTED**)
+- **Interactive Platform Toggles**: Logo buttons with dynamic color matching and visual feedback
+- **Client-Side Filtering**: Instant platform selection with real-time data aggregation
+- **Platform Icons**: WebP logo assets (240x240px) with CSS masking for color consistency
+- **Cross-Platform Aggregation**: Topics and keywords combined across selected platforms
+- **Comparative Sentiment Charts**: Multiple platform lines with chronological ordering
+- **Unified Dashboard Updates**: All sections update simultaneously on platform toggle
+- **Efficient API Integration**: Single endpoint calls with client-side data processing
+
+**Current API Integration**: 6 calls per dashboard load (see [TODO.md](TODO.md) for optimization plan)
 
 ## Deployment Configuration
 
@@ -96,7 +129,7 @@ main = "src/index.js"
 compatibility_date = "2024-01-15"
 
 [triggers]
-crons = ["0 * * * *"]  # Hourly data collection
+crons = ["0 * * * *"]  # Hourly trigger for staggered multi-platform data collection
 
 [[d1_databases]]
 binding = "DB"
@@ -136,16 +169,28 @@ claudometer/
 └── README.md               # Setup instructions
 ```
 
-## Recent Critical Fixes
-1. **Reddit OAuth**: Added proper authentication (was failing with unauthenticated requests)
-2. **API Key Fix**: Changed `env.ANTHROPIC_API_KEY` to `env.OPENAI_API_KEY`
-3. **Weighted Sentiment**: Posts count 3x more than comments in overall sentiment
-4. **Separate Storage**: Posts and comments in different tables
-5. **Increased Data**: 20 posts + 5 comments per subreddit (vs 10 posts only)
-6. **Rate Limiting**: 2-3 second delays between API calls
-7. **KV Caching**: Added comprehensive caching system with 55-minute TTL
-8. **Performance**: 95% faster API responses, <1 second dashboard loads
-9. **Cache Invalidation**: Automatic cache clearing after hourly data collection
+## Major Architecture Updates
+
+### Multi-Platform Transformation
+1. **Platform Expansion**: Extended from Claude-only to Claude + ChatGPT + Gemini monitoring
+2. **Staggered Collection**: Implemented intelligent scheduling to avoid Reddit API limits
+3. **Platform-Specific Configuration**: Separate subreddit lists, analysis prompts, and rate limits per platform
+4. **Modular Refactoring**: Transformed 1200+ line monolith into organized modular architecture
+5. **Database Evolution**: Added platform_id support and platforms configuration table with icon paths
+
+### Frontend Platform Integration (Latest)
+6. **Interactive Platform Toggles**: Logo-based controls with dynamic visual feedback
+7. **Client-Side Data Aggregation**: Real-time filtering and cross-platform data combination
+8. **Visual Design System**: Platform icons with CSS masking for consistent color theming
+9. **Performance Optimization**: Single API calls with JavaScript-based data processing
+10. **Chronological Chart Ordering**: Fixed sentiment timeline to show oldest-to-newest progression
+
+### Performance & Reliability Improvements
+11. **Enhanced Rate Limiting**: Increased from 20 to 120 requests/hour for better usability
+12. **Comprehensive Analysis**: Now analyzes ALL fetched content (225 items/hour) instead of subset
+13. **Advanced Caching**: KV cache system with 55-minute TTL + automatic invalidation
+14. **Security Hardening**: Input sanitization and output validation against prompt injection
+15. **Production Monitoring**: Comprehensive error handling and logging throughout
 
 ## Environment Setup for Local Development
 ```bash

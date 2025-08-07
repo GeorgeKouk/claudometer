@@ -9,49 +9,201 @@ import Methodology from './pages/Methodology';
 const Claudometer = () => {
   const [timeframe, setTimeframe] = useState('24h');
   const [sentimentMode, setSentimentMode] = useState<'latest' | 'average'>('average');
-  const [latestSentiment, setLatestSentiment] = useState<number>(0.5);
-  const [averageSentiment, setAverageSentiment] = useState<number>(0.5);
-  const [latestPostCount, setLatestPostCount] = useState<number>(0);
-  const [latestCommentCount, setLatestCommentCount] = useState<number>(0);
-  const [avgPostCount, setAvgPostCount] = useState<number>(0);
-  const [avgCommentCount, setAvgCommentCount] = useState<number>(0);
   const [hourlyData, setHourlyData] = useState<any[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
-  const [topicData, setTopicData] = useState<any[]>([]);
-  const [keywordData, setKeywordData] = useState<any[]>([]);
+  const [topicData, setTopicData] = useState<any>({});
+  const [keywordData, setKeywordData] = useState<any>({});
   const [recentPosts, setRecentPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [nextRefresh, setNextRefresh] = useState<Date | null>(null);
   const [showAllTopics, setShowAllTopics] = useState<boolean>(false);
   const [showAllKeywords, setShowAllKeywords] = useState<boolean>(false);
+  const [platforms, setPlatforms] = useState<any[]>([]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['claude', 'chatgpt', 'gemini']);
+  const [currentSentimentData, setCurrentSentimentData] = useState<any>({});
 
   // Store raw data for filtering
 
-  const API_BASE = 'https://api.claudometer.app';
+  const API_BASE = process.env.NODE_ENV === 'production' 
+    ? 'https://api.claudometer.app' 
+    : 'http://localhost:8787';
 
-  // Memoized expensive computations
+
+  // Compute filtered sentiment data based on selected platforms
+  const filteredSentimentData = useMemo(() => {
+    if (!currentSentimentData || selectedPlatforms.length === 0) {
+      return {
+        latest_sentiment: 0.5,
+        avg_sentiment: 0.5,
+        latest_post_count: 0,
+        latest_comment_count: 0,
+        avg_post_count: 0,
+        avg_comment_count: 0
+      };
+    }
+
+    // Get data for selected platforms only
+    const selectedPlatformData = selectedPlatforms
+      .map(platformId => currentSentimentData[platformId])
+      .filter(Boolean);
+
+    if (selectedPlatformData.length === 0) {
+      return {
+        latest_sentiment: 0.5,
+        avg_sentiment: 0.5,
+        latest_post_count: 0,
+        latest_comment_count: 0,
+        avg_post_count: 0,
+        avg_comment_count: 0
+      };
+    }
+
+    // Calculate weighted averages
+    const totalLatestPosts = selectedPlatformData.reduce((sum, platform) => sum + (platform.latest_post_count || 0), 0);
+    const totalLatestComments = selectedPlatformData.reduce((sum, platform) => sum + (platform.latest_comment_count || 0), 0);
+    const totalAvgPosts = selectedPlatformData.reduce((sum, platform) => sum + (platform.avg_post_count || 0), 0);
+    const totalAvgComments = selectedPlatformData.reduce((sum, platform) => sum + (platform.avg_comment_count || 0), 0);
+
+    // Weight posts 3x, comments 1x for sentiment calculation
+    const latestSentiment = selectedPlatformData.reduce((sum, platform) => {
+      const posts = platform.latest_post_count || 0;
+      const comments = platform.latest_comment_count || 0;
+      const weight = posts * 3 + comments * 1;
+      return sum + (platform.latest_sentiment || 0.5) * weight;
+    }, 0) / selectedPlatformData.reduce((sum, platform) => {
+      const posts = platform.latest_post_count || 0;
+      const comments = platform.latest_comment_count || 0;
+      return sum + posts * 3 + comments * 1;
+    }, 0) || 0.5;
+
+    const avgSentiment = selectedPlatformData.reduce((sum, platform) => {
+      const posts = platform.avg_post_count || 0;
+      const comments = platform.avg_comment_count || 0;
+      const weight = posts * 3 + comments * 1;
+      return sum + (platform.avg_sentiment || 0.5) * weight;
+    }, 0) / selectedPlatformData.reduce((sum, platform) => {
+      const posts = platform.avg_post_count || 0;
+      const comments = platform.avg_comment_count || 0;
+      return sum + posts * 3 + comments * 1;
+    }, 0) || 0.5;
+
+    return {
+      latest_sentiment: latestSentiment,
+      avg_sentiment: avgSentiment,
+      latest_post_count: totalLatestPosts,
+      latest_comment_count: totalLatestComments,
+      avg_post_count: totalAvgPosts,
+      avg_comment_count: totalAvgComments
+    };
+  }, [currentSentimentData, selectedPlatforms]);
+
+  // Compute filtered topic data based on selected platforms
+  const filteredTopicData = useMemo(() => {
+    if (!topicData || selectedPlatforms.length === 0) {
+      return [];
+    }
+
+    const topicMap: { [key: string]: any } = {};
+    
+    selectedPlatforms.forEach(platformId => {
+      (topicData[platformId] || []).forEach((topic: any) => {
+        if (!topicMap[topic.name]) {
+          topicMap[topic.name] = {
+            name: topic.name,
+            totalValue: 0,
+            totalSentiment: 0,
+            totalWeight: 0,
+            referenceCount: 0,
+            color: topic.color
+          };
+        }
+        
+        topicMap[topic.name].totalValue += topic.value;
+        topicMap[topic.name].totalSentiment += topic.sentiment * topic.referenceCount;
+        topicMap[topic.name].totalWeight += topic.referenceCount;
+        topicMap[topic.name].referenceCount += topic.referenceCount;
+      });
+    });
+    
+    // Calculate final percentages and sentiment
+    const total = Object.values(topicMap).reduce((sum: number, t: any) => sum + t.totalValue, 0);
+    
+    return Object.values(topicMap).map((topic: any) => ({
+      name: topic.name,
+      value: total > 0 ? Math.round((topic.totalValue / total) * 100) : 0,
+      sentiment: topic.totalWeight > 0 ? topic.totalSentiment / topic.totalWeight : 0.5,
+      color: topic.color,
+      referenceCount: topic.referenceCount
+    })).sort((a, b) => b.value - a.value);
+  }, [topicData, selectedPlatforms]);
+
+  // Compute filtered keyword data based on selected platforms
+  const filteredKeywordData = useMemo(() => {
+    if (!keywordData || selectedPlatforms.length === 0) {
+      return [];
+    }
+
+    const keywordMap: { [key: string]: any } = {};
+    
+    selectedPlatforms.forEach(platformId => {
+      (keywordData[platformId] || []).forEach((keyword: any) => {
+        if (!keywordMap[keyword.keyword]) {
+          keywordMap[keyword.keyword] = {
+            keyword: keyword.keyword,
+            totalCount: 0,
+            totalSentiment: 0,
+            totalWeight: 0
+          };
+        }
+        
+        keywordMap[keyword.keyword].totalCount += keyword.count;
+        keywordMap[keyword.keyword].totalSentiment += keyword.sentiment * keyword.count;
+        keywordMap[keyword.keyword].totalWeight += keyword.count;
+      });
+    });
+    
+    return Object.values(keywordMap)
+      .map((kw: any) => ({
+        keyword: kw.keyword,
+        count: kw.totalCount,
+        sentiment: kw.totalWeight > 0 ? kw.totalSentiment / kw.totalWeight : 0.5
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20); // Show top 20 combined
+  }, [keywordData, selectedPlatforms]);
+
+  // Memoized expensive computations - now use filtered data
   const sortedTopicData = useMemo(() => {
-    return [...topicData].sort((a, b) => b.value - a.value);
-  }, [topicData]);
+    return [...filteredTopicData].sort((a, b) => b.value - a.value);
+  }, [filteredTopicData]);
 
   const maxKeywordCount = useMemo(() => {
-    return keywordData.length > 0 ? Math.max(...keywordData.map(k => k.count)) : 0;
-  }, [keywordData]);
+    return filteredKeywordData.length > 0 ? Math.max(...filteredKeywordData.map(k => k.count)) : 0;
+  }, [filteredKeywordData]);
 
   const chartData = useMemo(() => {
-    return [
-      ...hourlyData,
-      // Add events as vertical line markers
-      ...events.map(event => ({
-        time: event.date,
-        sentiment: null,
-        post_count: null,
-        eventMarker: 1, // Will be used for ReferenceLine
-        eventTitle: event.title
-      }))
-    ];
-  }, [hourlyData, events]);
+    // Sort hourly data chronologically (oldest to newest) and transform
+    const sortedHourlyData = [...hourlyData].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+    const transformedHourlyData = sortedHourlyData.map(dataPoint => {
+      const platforms = dataPoint.platforms || {};
+      
+      return {
+        time: dataPoint.time,
+        // Individual platform sentiments
+        claude_sentiment: platforms.claude?.sentiment || null,
+        chatgpt_sentiment: platforms.chatgpt?.sentiment || null,
+        gemini_sentiment: platforms.gemini?.sentiment || null,
+        // For backward compatibility (use claude as primary)
+        sentiment: platforms.claude?.sentiment || platforms.chatgpt?.sentiment || platforms.gemini?.sentiment || 0.5,
+        post_count: platforms.claude?.post_count || platforms.chatgpt?.post_count || platforms.gemini?.post_count || 0,
+        comment_count: platforms.claude?.comment_count || platforms.chatgpt?.comment_count || platforms.gemini?.comment_count || 0,
+        posts: platforms.claude?.posts || platforms.chatgpt?.posts || platforms.gemini?.posts || 0,
+        events: dataPoint.events || []
+      };
+    });
+    
+    return transformedHourlyData;
+  }, [hourlyData]);
 
 
   // Calculate next refresh time (3 minutes after each hour)
@@ -84,6 +236,9 @@ const Claudometer = () => {
       await delay(200);
       
       const postsRes = await fetch(`${API_BASE}/recent-posts?period=${timeframe}`);
+      await delay(200);
+      
+      const platformsRes = await fetch(`${API_BASE}/platforms`);
 
       // Parse responses
       const currentData = await currentRes.json();
@@ -91,18 +246,13 @@ const Claudometer = () => {
       const topicsDataRaw = await topicsRes.json();
       const keywordsDataRaw = await keywordsRes.json();
       const postsDataRaw = await postsRes.json();
+      const platformsData = await platformsRes.json();
 
-      // Update state
-      setLatestSentiment(currentData.latest_sentiment || 0.5);
-      setAverageSentiment(currentData.avg_sentiment || 0.5);
-      setLatestPostCount(currentData.latest_post_count || 0);
-      setLatestCommentCount(currentData.latest_comment_count || 0);
-      setAvgPostCount(currentData.avg_post_count || 0);
-      setAvgCommentCount(currentData.avg_comment_count || 0);
+      // Store all platform data for client-side filtering
+      setCurrentSentimentData(currentData);
       
-      // Handle new simple data structure: just array with events merged in
-      setHourlyData(hourlyDataRaw || []);
-      setEvents([]); // No longer needed - events are in hourlyData
+      // Handle new multi-platform hourly data structure
+      setHourlyData(hourlyDataRaw.data || []);
       
       // Store raw data for filtering (sort posts by most recent first)
       const sortedPosts = (postsDataRaw || []).sort((a: any, b: any) => {
@@ -110,10 +260,11 @@ const Claudometer = () => {
         const dateB = new Date(b.created_at || b.time);
         return dateB.getTime() - dateA.getTime();
       });
-      // Set data directly
+      // Set data directly - now expecting platform-grouped objects
       setRecentPosts(sortedPosts);
-      setTopicData(topicsDataRaw || []);
-      setKeywordData(keywordsDataRaw || []);
+      setTopicData(topicsDataRaw || {});
+      setKeywordData(keywordsDataRaw || {});
+      setPlatforms(platformsData || []);
 
       // Update next refresh time
       setNextRefresh(getNextRefreshTime());
@@ -245,7 +396,7 @@ const Claudometer = () => {
             </h1>
           </div>
           <p className="text-lg font-medium max-w-2xl mx-auto" style={{ color: '#9f6841' }}>
-            Sentiment tracking for Claude AI across Reddit communities
+            Sentiment tracking for LLMs across reddit communities
           </p>
           {nextRefresh && (
             <p className="text-sm font-medium mt-2" style={{ color: '#9f6841' }}>
@@ -259,7 +410,7 @@ const Claudometer = () => {
         </div>
 
         {/* Time Range Controls */}
-        <div className="flex justify-center gap-2 sm:gap-3 mb-5 sm:mb-10">
+        <div className="flex justify-center gap-2 sm:gap-3 mb-5 sm:mb-8">
           {[
             { value: '24h', label: 'Last 24 Hours', shortLabel: '24hrs' },
             { value: '7d', label: 'Last 7 Days', shortLabel: '7 days' },
@@ -290,6 +441,76 @@ const Claudometer = () => {
               <span className="sm:hidden">{option.shortLabel}</span>
             </button>
           ))}
+        </div>
+
+        {/* Platform Toggle Controls */}
+        <div className="flex justify-center gap-3 mb-5 sm:mb-10">
+          {platforms.map((platform) => {
+            const isSelected = selectedPlatforms.includes(platform.id);
+            const canDeselect = selectedPlatforms.length > 1 || !isSelected;
+            
+            return (
+              <button
+                key={platform.id}
+                onClick={() => {
+                  if (isSelected && canDeselect) {
+                    setSelectedPlatforms(prev => prev.filter(id => id !== platform.id));
+                  } else if (!isSelected) {
+                    setSelectedPlatforms(prev => [...prev, platform.id]);
+                  }
+                }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl font-medium transition-all duration-300 hover:scale-105 focus:ring-4 focus:outline-none ${
+                  isSelected ? 'shadow-lg' : 'opacity-50 hover:opacity-75'
+                } ${
+                  !canDeselect ? 'cursor-not-allowed' : 'cursor-pointer'
+                }`}
+                style={{
+                  backgroundColor: isSelected 
+                    ? platform.color || '#8b4513'
+                    : 'rgba(255, 255, 255, 0.85)',
+                  color: isSelected ? '#ffffff' : platform.color || '#8b4513',
+                  border: `2px solid ${platform.color || '#8b4513'}`,
+                  backdropFilter: 'blur(10px)'
+                }}
+                disabled={!canDeselect}
+              >
+                {platform.icon ? (
+                  <div className="relative">
+                    <img 
+                      src={platform.icon} 
+                      alt={`${platform.name} logo`}
+                      className="w-5 h-5 object-contain"
+                      style={{ 
+                        filter: isSelected ? 'brightness(0) invert(1)' : 'brightness(0) invert(1)'
+                      }}
+                    />
+                    {!isSelected && (
+                      <div 
+                        className="absolute inset-0 w-5 h-5 mask-image"
+                        style={{ 
+                          backgroundColor: platform.color || '#8b4513',
+                          maskImage: `url(${platform.icon})`,
+                          maskSize: 'contain',
+                          maskRepeat: 'no-repeat',
+                          maskPosition: 'center',
+                          WebkitMaskImage: `url(${platform.icon})`,
+                          WebkitMaskSize: 'contain',
+                          WebkitMaskRepeat: 'no-repeat',
+                          WebkitMaskPosition: 'center'
+                        }}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div 
+                    className="w-3 h-3 rounded-full" 
+                    style={{ backgroundColor: isSelected ? '#ffffff' : platform.color || '#8b4513' }}
+                  />
+                )}
+                <span className="text-sm font-semibold">{platform.name}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Loading/Error States */}
@@ -332,15 +553,15 @@ const Claudometer = () => {
               </h3>
 
               <SentimentMeter 
-                value={sentimentMode === 'latest' ? latestSentiment : averageSentiment} 
+                value={sentimentMode === 'latest' ? filteredSentimentData.latest_sentiment : filteredSentimentData.avg_sentiment} 
                 mode={sentimentMode}
                 timeframe={timeframe}
               />
               
               <div className="text-center text-xs font-medium mb-3" style={{ color: '#9f6841' }}>
                 Based on {sentimentMode === 'latest' 
-                  ? (latestPostCount + latestCommentCount) 
-                  : (avgPostCount + avgCommentCount)
+                  ? (filteredSentimentData.latest_post_count + filteredSentimentData.latest_comment_count) 
+                  : (filteredSentimentData.avg_post_count + filteredSentimentData.avg_comment_count)
                 } posts/comments
               </div>
               
@@ -382,7 +603,19 @@ const Claudometer = () => {
               <h3 className="text-xl font-semibold mb-6" style={{ color: '#8b4513' }}>
                 Sentiment Trend ({timeframe === '24h' ? '24h' : timeframe === '7d' ? '7 days' : timeframe === '30d' ? '30 days' : 'All Time'})
               </h3>
-              <ResponsiveContainer width="100%" height={280}>
+              {chartData.length === 0 ? (
+                <div className="w-full h-70 flex items-center justify-center" style={{ height: '280px' }}>
+                  <div className="text-center">
+                    <div className="text-xl font-semibold mb-2" style={{ color: '#8b4513' }}>
+                      Something went wrong, we have no data for this period
+                    </div>
+                    <div className="text-sm font-medium" style={{ color: '#9f6841' }}>
+                      Try selecting a different time range or check back later
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
                 <LineChart 
                   data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ead1bf" />
@@ -426,10 +659,8 @@ const Claudometer = () => {
                   />
                   <Tooltip 
                     formatter={(value, name, props) => {
-                      if (name === 'Sentiment') {
-                        return [(Number(value) * 100).toFixed(1) + '%', 'Sentiment'];
-                      } else if (name === 'Post Count') {
-                        return [value + ' posts', 'Post Count'];
+                      if (name === 'Claude AI' || name === 'ChatGPT' || name === 'Google Gemini') {
+                        return [(Number(value) * 100).toFixed(1) + '%', name];
                       }
                       return [value, name];
                     }}
@@ -458,10 +689,6 @@ const Claudometer = () => {
                         return label;
                       }
                     }}
-                    itemSorter={(item) => {
-                      // Explicitly ensure sentiment appears first
-                      return item.name === 'Sentiment' ? 0 : 1;
-                    }}
                     labelStyle={{ color: '#8b4513' }}
                     contentStyle={{ 
                       backgroundColor: 'rgba(255, 255, 255, 0.95)', 
@@ -474,30 +701,16 @@ const Claudometer = () => {
                     wrapperStyle={{ paddingTop: '20px' }}
                     content={(props) => {
                       const { payload } = props;
-                      // Ensure sentiment appears first by sorting the payload
-                      const sortedPayload = payload ? [...payload].sort((a, b) => {
-                        if (a.dataKey === 'sentiment') return -1;
-                        if (b.dataKey === 'sentiment') return 1;
-                        return 0;
-                      }) : [];
                       return (
-                        <div className="flex justify-center gap-6">
-                          {sortedPayload.map((entry, index) => (
+                        <div className="flex justify-center gap-6 flex-wrap">
+                          {payload?.map((entry, index) => (
                             <div key={index} className="flex items-center gap-2">
                               <svg width="20" height="8">
-                                {entry.dataKey === 'sentiment' ? (
-                                  // Solid line with dot for sentiment
-                                  <>
-                                    <line x1="0" y1="4" x2="20" y2="4" stroke="#d4a37f" strokeWidth="3" />
-                                    <circle cx="10" cy="4" r="3" fill="#d4a37f" stroke="#fff" strokeWidth="1" />
-                                  </>
-                                ) : (
-                                  // Dashed line for post count
-                                  <line x1="0" y1="4" x2="20" y2="4" stroke="#c4a77d" strokeWidth="2" strokeDasharray="5 5" opacity="0.8" />
-                                )}
+                                <line x1="0" y1="4" x2="20" y2="4" stroke={entry.color} strokeWidth="3" />
+                                <circle cx="10" cy="4" r="3" fill={entry.color} stroke="#fff" strokeWidth="1" />
                               </svg>
                               <span style={{ 
-                                color: entry.dataKey === 'sentiment' ? '#8b4513' : '#9f6841', 
+                                color: entry.color, 
                                 fontSize: '14px',
                                 fontWeight: 'bold'
                               }}>{entry.value}</span>
@@ -509,83 +722,219 @@ const Claudometer = () => {
                   />
                   
                   
-                  <Line 
-                    yAxisId="sentiment"
-                    type="monotone" 
-                    dataKey="sentiment" 
-                    stroke="#d4a37f" 
-                    strokeWidth={3}
-                    dot={(props) => {
-                      const { cx, cy, payload } = props;
-                      return (
-                        <g key={`dot-${payload?.time || cx}`}>
-                          {/* Event vertical lines - only renders if events exist */}
-                          {payload?.events && payload.events.map((event: any, index: number) => (
-                            <g key={event.id}>
-                              {/* Vertical line from sentiment dot to event label */}
-                              <line 
-                                x1={cx} 
-                                y1={cy}     // Start at sentiment dot
-                                x2={cx} 
-                                y2={25}     // End a bit lower than before
-                                stroke="#8b4513" 
-                                strokeWidth={2}
-                              />
-                              {/* Event label background - rounded rectangle with better padding */}
-                              <rect
-                                x={cx - (event.title.length * 2.6 + 4)}  // Add 4px horizontal padding
-                                y={10}      // Add more vertical padding
-                                width={event.title.length * 5.2 + 8}   // Add 8px total horizontal padding (4px each side)
-                                height={18}   // Add 8px total vertical padding (4px each side)
-                                rx={5}      // Slightly more rounded corners
-                                ry={5}      // Slightly more rounded corners
-                                fill="#8b4513"
-                                stroke="#fff"
-                                strokeWidth={1}
-                                opacity={1} // Ensure background is solid
-                              />
-                              {/* Event label text */}
-                              <text
-                                x={cx}
-                                y={22}      // Adjusted for centered position in taller rect
-                                textAnchor="middle"
-                                fontSize="9"
-                                fill="#ffffff"
-                                fillOpacity={1}    // Ensure text is fully opaque
-                                fontWeight="600"
-                              >
-                                {event.title}
-                              </text>
-                            </g>
-                          ))}
-                          {/* Regular sentiment dot */}
-                          <circle 
-                            cx={cx} 
-                            cy={cy} 
-                            r={5} 
-                            fill="#d4a37f" 
-                            stroke="#fff" 
-                            strokeWidth={2}
-                          />
-                        </g>
-                      );
-                    }}
-                    activeDot={{ r: 5, stroke: '#d4a37f', strokeWidth: 2, fill: '#ffffff' }}
-                    name="Sentiment"
-                  />
-                  <Line 
-                    yAxisId="posts"
-                    type="monotone" 
-                    dataKey="post_count" 
-                    stroke="#c4a77d" 
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    opacity={0.8}
-                    name="Post Count"
-                  />
+                  {/* Conditionally render platform lines based on selection */}
+                  {selectedPlatforms.includes('claude') && (
+                    <Line 
+                      yAxisId="sentiment"
+                      type="monotone" 
+                      dataKey="claude_sentiment" 
+                      stroke="#8B4513" 
+                      strokeWidth={3}
+                      name="Claude AI"
+                      connectNulls={false}
+                      dot={(props) => {
+                        const { cx, cy, payload } = props;
+                        // Only show events on first selected platform to avoid duplication
+                        const showEvents = selectedPlatforms[0] === 'claude';
+                        return (
+                          <g key={`claude-dot-${payload?.time || cx}`}>
+                            {/* Event vertical lines - only renders if events exist and this is first platform */}
+                            {showEvents && payload?.events && payload.events.map((event: any, index: number) => (
+                              <g key={event.id}>
+                                {/* Vertical line from sentiment dot to event label */}
+                                <line 
+                                  x1={cx} 
+                                  y1={cy}     // Start at sentiment dot
+                                  x2={cx} 
+                                  y2={25}     // End a bit lower than before
+                                  stroke="#8b4513" 
+                                  strokeWidth={2}
+                                />
+                                {/* Event label background */}
+                                <rect
+                                  x={cx - (event.title.length * 2.6 + 4)}
+                                  y={10}
+                                  width={event.title.length * 5.2 + 8}
+                                  height={18}
+                                  rx={5}
+                                  ry={5}
+                                  fill="#8b4513"
+                                  stroke="#fff"
+                                  strokeWidth={1}
+                                  opacity={1}
+                                />
+                                {/* Event label text */}
+                                <text
+                                  x={cx}
+                                  y={22}
+                                  textAnchor="middle"
+                                  fontSize="9"
+                                  fill="#ffffff"
+                                  fillOpacity={1}
+                                  fontWeight="600"
+                                >
+                                  {event.title}
+                                </text>
+                              </g>
+                            ))}
+                            {/* Claude sentiment dot */}
+                            <circle 
+                              cx={cx} 
+                              cy={cy} 
+                              r={4} 
+                              fill="#8B4513" 
+                              stroke="#fff" 
+                              strokeWidth={2}
+                            />
+                          </g>
+                        );
+                      }}
+                      activeDot={{ r: 6, stroke: '#8B4513', strokeWidth: 2, fill: '#ffffff' }}
+                    />
+                  )}
+                  
+                  {selectedPlatforms.includes('chatgpt') && (
+                    <Line 
+                      yAxisId="sentiment"
+                      type="monotone" 
+                      dataKey="chatgpt_sentiment" 
+                      stroke="#10A37F" 
+                      strokeWidth={3}
+                      name="ChatGPT"
+                      connectNulls={false}
+                      dot={(props) => {
+                        const { cx, cy, payload } = props;
+                        // Only show events on first selected platform to avoid duplication
+                        const showEvents = selectedPlatforms[0] === 'chatgpt';
+                        return (
+                          <g key={`chatgpt-dot-${payload?.time || cx}`}>
+                            {/* Event vertical lines - only renders if events exist and this is first platform */}
+                            {showEvents && payload?.events && payload.events.map((event: any, index: number) => (
+                              <g key={event.id}>
+                                {/* Vertical line from sentiment dot to event label */}
+                                <line 
+                                  x1={cx} 
+                                  y1={cy}     // Start at sentiment dot
+                                  x2={cx} 
+                                  y2={25}     // End a bit lower than before
+                                  stroke="#10A37F" 
+                                  strokeWidth={2}
+                                />
+                                {/* Event label background */}
+                                <rect
+                                  x={cx - (event.title.length * 2.6 + 4)}
+                                  y={10}
+                                  width={event.title.length * 5.2 + 8}
+                                  height={18}
+                                  rx={5}
+                                  ry={5}
+                                  fill="#10A37F"
+                                  stroke="#fff"
+                                  strokeWidth={1}
+                                  opacity={1}
+                                />
+                                {/* Event label text */}
+                                <text
+                                  x={cx}
+                                  y={22}
+                                  textAnchor="middle"
+                                  fontSize="9"
+                                  fill="#ffffff"
+                                  fillOpacity={1}
+                                  fontWeight="600"
+                                >
+                                  {event.title}
+                                </text>
+                              </g>
+                            ))}
+                            {/* ChatGPT sentiment dot */}
+                            <circle 
+                              cx={cx} 
+                              cy={cy} 
+                              r={4} 
+                              fill="#10A37F" 
+                              stroke="#fff" 
+                              strokeWidth={2}
+                            />
+                          </g>
+                        );
+                      }}
+                      activeDot={{ r: 6, stroke: '#10A37F', strokeWidth: 2, fill: '#ffffff' }}
+                    />
+                  )}
+                  
+                  {selectedPlatforms.includes('gemini') && (
+                    <Line 
+                      yAxisId="sentiment"
+                      type="monotone" 
+                      dataKey="gemini_sentiment" 
+                      stroke="#4285F4" 
+                      strokeWidth={3}
+                      name="Google Gemini"
+                      connectNulls={false}
+                      dot={(props) => {
+                        const { cx, cy, payload } = props;
+                        // Only show events on first selected platform to avoid duplication
+                        const showEvents = selectedPlatforms[0] === 'gemini';
+                        return (
+                          <g key={`gemini-dot-${payload?.time || cx}`}>
+                            {/* Event vertical lines - only renders if events exist and this is first platform */}
+                            {showEvents && payload?.events && payload.events.map((event: any, index: number) => (
+                              <g key={event.id}>
+                                {/* Vertical line from sentiment dot to event label */}
+                                <line 
+                                  x1={cx} 
+                                  y1={cy}     // Start at sentiment dot
+                                  x2={cx} 
+                                  y2={25}     // End a bit lower than before
+                                  stroke="#4285F4" 
+                                  strokeWidth={2}
+                                />
+                                {/* Event label background */}
+                                <rect
+                                  x={cx - (event.title.length * 2.6 + 4)}
+                                  y={10}
+                                  width={event.title.length * 5.2 + 8}
+                                  height={18}
+                                  rx={5}
+                                  ry={5}
+                                  fill="#4285F4"
+                                  stroke="#fff"
+                                  strokeWidth={1}
+                                  opacity={1}
+                                />
+                                {/* Event label text */}
+                                <text
+                                  x={cx}
+                                  y={22}
+                                  textAnchor="middle"
+                                  fontSize="9"
+                                  fill="#ffffff"
+                                  fillOpacity={1}
+                                  fontWeight="600"
+                                >
+                                  {event.title}
+                                </text>
+                              </g>
+                            ))}
+                            {/* Gemini sentiment dot */}
+                            <circle 
+                              cx={cx} 
+                              cy={cy} 
+                              r={4} 
+                              fill="#4285F4" 
+                              stroke="#fff" 
+                              strokeWidth={2}
+                            />
+                          </g>
+                        );
+                      }}
+                      activeDot={{ r: 6, stroke: '#4285F4', strokeWidth: 2, fill: '#ffffff' }}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
@@ -635,7 +984,7 @@ const Claudometer = () => {
               </div>
               <div className="w-full sm:w-1/2 space-y-3 mt-4 sm:mt-0">
                 {sortedTopicData
-                  .slice(0, showAllTopics ? topicData.length : 10)
+                  .slice(0, showAllTopics ? filteredTopicData.length : 10)
                   .map((item) => (
                     <div key={item.name} className="flex items-center">
                       <div 
@@ -652,13 +1001,13 @@ const Claudometer = () => {
                       </div>
                     </div>
                   ))}
-                {topicData.length > 10 && (
+                {filteredTopicData.length > 10 && (
                   <button
                     onClick={() => setShowAllTopics(!showAllTopics)}
                     className="text-xs font-medium mt-2 hover:underline transition-all duration-200"
                     style={{ color: '#8b4513' }}
                   >
-                    {showAllTopics ? `Show less` : `Show all ${topicData.length} topics`}
+                    {showAllTopics ? `Show less` : `Show all ${filteredTopicData.length} topics`}
                   </button>
                 )}
               </div>
@@ -677,7 +1026,7 @@ const Claudometer = () => {
               Color and tag show sentiment toward that keyword.
             </p>
             <div className="space-y-4">
-              {keywordData.slice(0, showAllKeywords ? keywordData.length : 10).map((item) => {
+              {filteredKeywordData.slice(0, showAllKeywords ? filteredKeywordData.length : 10).map((item) => {
                 const maxCount = maxKeywordCount;
                 return (
                   <div key={item.keyword} className="flex items-center justify-between">
@@ -711,13 +1060,13 @@ const Claudometer = () => {
                   </div>
                 );
               })}
-              {keywordData.length > 10 && (
+              {filteredKeywordData.length > 10 && (
                 <button
                   onClick={() => setShowAllKeywords(!showAllKeywords)}
                   className="text-xs font-medium mt-2 hover:underline transition-all duration-200"
                   style={{ color: '#8b4513' }}
                 >
-                  {showAllKeywords ? `Show less` : `Show all ${keywordData.length} keywords`}
+                  {showAllKeywords ? `Show less` : `Show all ${filteredKeywordData.length} keywords`}
                 </button>
               )}
             </div>
@@ -735,7 +1084,9 @@ const Claudometer = () => {
             Recent Posts & Comments
           </h3>
           <div className="space-y-4">
-            {recentPosts.map((post) => (
+            {recentPosts
+              .filter(post => selectedPlatforms.includes(post.platform?.id || 'claude'))
+              .map((post) => (
               <div key={post.id} className="border-l-4 pl-6 py-2 sm:py-4 rounded-r-xl" style={{ 
                 borderColor: getSentimentColor(post.sentiment),
                 backgroundColor: 'rgba(246, 237, 229, 0.3)'

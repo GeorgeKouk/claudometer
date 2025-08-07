@@ -9,9 +9,10 @@
 - **LOCAL DEVELOPMENT OK**: `npm run dev` and `wrangler dev` are safe for local testing
 
 ## Required Reading
-**IMPORTANT**: Always read both files for complete project understanding:
-- **project-summary.md** - Comprehensive project overview, architecture, and setup instructions
+**IMPORTANT**: Always read these files for complete project understanding:
+- **PROJECT-OVERVIEW.md** - Comprehensive project overview, architecture, and setup instructions
 - **CLAUDE.md** (this file) - Technical implementation details and development behavior
+- **TODO.md** - Development priorities and planned optimizations
 
 ## Technical Implementation Details
 
@@ -32,11 +33,13 @@ Claudometer/
 - `tailwind.config.js` - Tailwind CSS configuration
 
 ### Features
-- Real-time sentiment meter with gauge visualization
-- 24-hour trend charts using Recharts
-- Topic breakdown pie charts
-- Trending keywords analysis
-- Recent posts feed with sentiment scores
+- **Real-time sentiment meter** with gauge visualization
+- **Multi-platform toggle controls** with logo icons (Claude, ChatGPT, Gemini)
+- **Client-side platform filtering** with instant response
+- **24-hour trend charts** using Recharts with chronological ordering
+- **Topic breakdown** pie charts with cross-platform aggregation
+- **Trending keywords** analysis with weighted sentiment
+- **Recent posts feed** with individual sentiment scores and platform indicators
 
 ### Build Configuration
 - **Framework**: Create React App (TypeScript)
@@ -46,19 +49,57 @@ Claudometer/
 
 ## Backend (claudometer-worker/)
 
-### Key Files
-- `src/index.js` - Main worker with API endpoints, cron handlers, and KV caching logic
-- `wrangler.toml` - Cloudflare Workers configuration with KV binding
+### Modular Architecture
+**Main Entry Point:**
+- `src/index.js` - Request router, rate limiting (120 req/hour), and cron scheduler (137 lines)
+
+**Handler Modules:**
+- `src/handlers/api.handlers.js` - Multi-platform API endpoints with optional platform filtering
+- `src/handlers/dev.handlers.js` - Development tools and debugging endpoints  
+- `src/handlers/cron.handlers.js` - Staggered multi-platform data collection logic
+
+**Service Modules:**
+- `src/services/cache.service.js` - KV cache management with dynamic TTL
+- `src/services/database.service.js` - Multi-platform database operations with platform_id support
+- `src/services/reddit.service.js` - Platform-aware Reddit API integration with OAuth
+- `src/services/ai.service.js` - Platform-specific OpenAI sentiment analysis with tailored prompts
+
+**Utility & Configuration:**
+- `src/utils/` - CORS headers, helpers, input sanitization, and output validation
+- `src/config/platforms.js` - Platform definitions (Claude, ChatGPT, Gemini)
+- `wrangler.toml` - Cloudflare Workers configuration with D1 and KV bindings
 - `package.json` - Dependencies and scripts
 
-### API Endpoints (All Public Endpoints Cached for 55 Minutes)
+### Multi-Platform API Endpoints (All Public Endpoints Cached for 55 Minutes)
+**Public API (Rate Limited: 120 requests/hour per IP)**
 - `GET /` - Health check
-- `GET /current-sentiment` - Latest sentiment data (cached by period parameter)
-- `GET /hourly-data` - 24-hour trend data (cached by period parameter) - **NEW FORMAT**: `{data: [...], events: [...]}`
-- `GET /topics` - Topic breakdown (cached by period parameter)
-- `GET /keywords` - Trending keywords (cached by period parameter)
-- `GET /recent-posts` - Recent posts feed (cached by period parameter)
-- `GET /collect-data` - Manual data collection trigger (REMOVED for security - only accessible via cron)
+- `GET /current-sentiment` - Multi-platform sentiment data (optional `?platform=claude|chatgpt|gemini` filter)
+- `GET /hourly-data` - Multi-platform time series with events (optional platform filter)
+- `GET /topics` - Topic breakdown across platforms (optional platform filter)
+- `GET /keywords` - Trending keywords analysis (optional platform filter)
+- `GET /recent-posts` - Recent posts feed (optional platform filter)
+- `GET /platforms` - Available platform metadata and configuration
+
+**⚠️ Frontend Integration**: Current setup requires 6 API calls per dashboard load. See [TODO.md](TODO.md) for planned `/dashboard` endpoint optimization to reduce to 1 call.
+
+### Frontend Platform Integration (Client-Side Filtering)
+**Platform Toggle UI:**
+- **Location**: Between date controls and dashboard content  
+- **Design**: Platform logo buttons with names and visual feedback
+- **Interaction**: Toggle platforms individually, minimum one platform required
+- **Icons**: WebP logos stored in `public/platform-logos/` (240x240px)
+  - `claude.webp` - Anthropic diamond logo
+  - `chatgpt.webp` - OpenAI starburst logo  
+  - `gemini.webp` - Google Gemini logo
+- **Color Matching**: Icons dynamically colored to match platform colors when unselected
+
+**Client-Side Aggregation Logic:**
+- **API Efficiency**: Single API call per endpoint returns platform-grouped data
+- **Real-Time Filtering**: `useMemo()` hooks aggregate selected platforms instantly
+- **Topics Aggregation**: Combines same-name topics across platforms with weighted sentiment
+- **Keywords Aggregation**: Sums keyword counts and calculates weighted sentiment
+- **Chart Integration**: Platform lines conditionally rendered based on selection
+- **Data Consistency**: All dashboard sections update simultaneously on platform toggle
 
 ### Development Endpoints (DEV_MODE_ENABLED=true required)
 - `GET /dev/events-admin` - HTML interface for event management
@@ -70,9 +111,14 @@ Claudometer/
 - `POST /dev/reevaluate` - Re-analyze sentiment
 - `POST /dev/rollback` - Rollback sentiment changes
 
-### Cron Schedule
-- **Frequency**: Every hour (`0 * * * *`)
-- **Function**: Automated Reddit data collection and analysis
+### Multi-Platform Cron Schedule
+- **Trigger**: Every hour (`0 * * * *`)
+- **Staggered Collection**: Intelligent scheduling to avoid Reddit API limits
+  - **0-15 minutes**: Claude data collection (r/Anthropic, r/ClaudeAI, r/ClaudeCode)
+  - **15-30 minutes**: ChatGPT data collection (r/ChatGPT, r/OpenAI, r/GPT4)
+  - **30-45 minutes**: Gemini data collection (r/GoogleAI, r/Bard, r/Gemini)
+- **Total Volume**: ~225 items analyzed per hour (75 per platform × 3 platforms)
+- **Cache Management**: Automatic invalidation after each platform's successful collection
 
 ## Configuration & Secrets
 
@@ -84,11 +130,15 @@ REDDIT_CLIENT_SECRET=your_reddit_client_secret
 OPENAI_API_KEY=your_openai_api_key
 ```
 
-### Reddit API Setup
+### Multi-Platform Reddit API Setup
 - **Bot Account**: `claudometer_bot` (dedicated Reddit account for API access)
 - **App Type**: Script (uses client credentials flow)
-- **User-Agent**: `Claudometer/1.0.0 by /u/claudometer_bot`
-- **Monitored Subreddits**: r/Anthropic, r/ClaudeAI, r/ClaudeCode
+- **Platform-Specific User-Agents**: Each platform uses tailored User-Agent strings
+- **Monitored Communities**:
+  - **Claude**: r/Anthropic, r/ClaudeAI, r/ClaudeCode
+  - **ChatGPT**: r/ChatGPT, r/OpenAI, r/GPT4
+  - **Gemini**: r/GoogleAI, r/Bard, r/Gemini
+- **Rate Limiting**: 2-3 second delays between requests, staggered collection times
 
 ### Database Configuration
 - **Type**: Cloudflare D1 SQLite database
@@ -114,11 +164,12 @@ npx wrangler d1 execute claudometer-db --remote --command "PRAGMA table_info(tab
 ```
 
 **Main Tables:**
-- `posts` - Reddit posts with sentiment analysis
-- `comments` - Reddit comments with sentiment analysis  
-- `sentiment_hourly` - Hourly aggregated sentiment data
+- `posts` - Reddit posts with sentiment analysis + platform_id for multi-platform support
+- `comments` - Reddit comments with sentiment analysis + platform_id for multi-platform support
+- `sentiment_hourly` - Hourly aggregated sentiment data (weighted: posts 3x, comments 1x)
+- `platforms` - Platform configuration (claude, chatgpt, gemini) with colors, subreddits, descriptions, **and icon paths**
 - `topics` - Topic definitions with colors (used by API endpoints)
-- `events` - Event annotations for chart (id, title, description, event_date, event_type, url, created_at)
+- `events` - Event annotations for charts (id, title, description, event_date, event_type, url, created_at)
 
 **System Tables:**
 - `_cf_METADATA` - Cloudflare internal metadata
@@ -135,10 +186,11 @@ npx wrangler d1 execute claudometer-db --remote --command "PRAGMA table_info(tab
 
 ### Cloudflare Workers Setup
 1. **Configuration**: `wrangler.toml` in `claudometer-worker/`
-2. **Secrets**: Set via Cloudflare dashboard
-3. **Database**: D1 binding configured in wrangler.toml
-4. **Cache**: KV namespace binding configured in wrangler.toml
-5. **Cron**: Hourly trigger for data collection with automatic cache invalidation
+2. **Secrets**: Set via Cloudflare dashboard (Reddit OAuth + OpenAI API key)
+3. **Database**: D1 binding configured with platforms table for multi-platform support
+4. **Cache**: KV namespace binding configured for 55-minute TTL with dynamic invalidation
+5. **Cron**: Hourly trigger with intelligent staggered collection (Claude→ChatGPT→Gemini)
+6. **Modular Architecture**: Clean separation of concerns across handlers, services, and utilities
 
 ### Git Integration
 - **Single Repository**: Both frontend and backend in same repo
@@ -178,13 +230,17 @@ npx wrangler kv namespace create CLAUDOMETER_CACHE --preview
 
 ## Critical Implementation Notes
 
-### Key API Behavior
-- **Rate Limiting**: Always include 2-3 second delays between Reddit API calls
-- **Authentication**: Use Reddit OAuth, not unauthenticated requests
-- **OpenAI Integration**: Use `env.OPENAI_API_KEY` (not ANTHROPIC_API_KEY)
-- **Weighted Sentiment**: Posts = 3x weight, Comments = 1x weight in calculations
-- **Caching Strategy**: KV cache-first approach with 55-minute TTL and automatic invalidation
+### Multi-Platform API Behavior
+- **Rate Limiting**: 120 requests/hour per IP (increased from 20 for multi-platform usage)
+- **Staggered Collection**: 15-minute intervals per platform to avoid Reddit API limits
+- **Platform-Specific Prompts**: Each platform uses tailored OpenAI analysis prompts for accuracy
+- **Comprehensive Analysis**: ALL fetched content analyzed (225 items/hour total)
+- **Authentication**: Reddit OAuth with platform-specific User-Agents
+- **OpenAI Integration**: Use `env.OPENAI_API_KEY` with input sanitization and output validation
+- **Weighted Sentiment**: Posts = 3x weight, Comments = 1x weight in sentiment calculations
+- **Caching Strategy**: KV cache-first approach with 55-minute TTL and automatic invalidation per platform
 - **Performance**: ~95% faster responses when cache is warm, <1 second dashboard loads
+- **Security**: Comprehensive input sanitization and output validation against prompt injection
 
 ### CRITICAL: Cache Management for Development
 - **Cache TTL**: 55 minutes - API changes may not be visible immediately
@@ -193,16 +249,26 @@ npx wrangler kv namespace create CLAUDOMETER_CACHE --preview
 - **Cache Keys**: Format `claudometer:endpoint:param=value`
 - **Cache Invalidation**: Automatic after hourly cron jobs, manual via dev endpoint
 
-### API Response Structure
-- **Current Format**: `{data: [{time, sentiment, post_count, comment_count, posts}], events: [...]}`
-- **Data Fields**: `posts` = combined count, `post_count`/`comment_count` = separate counts
-- **Events**: Array of event objects with `{id, title, description, date, type, url}`
+### Multi-Platform API Response Structure
+- **Default Behavior**: All endpoints return data for ALL platforms unless filtered with `?platform=` parameter
+- **Platform Filtering**: Optional `?platform=claude|chatgpt|gemini` parameter on all data endpoints
+- **Data Format**: `{data: [{time, sentiment, post_count, comment_count, posts, platform_id}], events: [...]}`
+- **Platform Metadata**: `/platforms` endpoint provides platform configuration and colors
+- **Cross-Platform Events**: Timeline events that may affect multiple platforms simultaneously
+- **Backward Compatibility**: Legacy single platform calls still supported for gradual migration
 
-### Data Collection Logic
-- Fetch 20 posts + 5 top comments per subreddit (3 subreddits total)
-- Analyze 10 posts + 15 comments with OpenAI (cost control)
-- Store posts and comments in separate tables
-- Generate hourly aggregations with weighted sentiment
+### Multi-Platform Data Collection Logic
+**Per Platform Collection (Staggered 15-minute intervals):**
+- Fetch 20 posts + 5 top comments per subreddit × 3 subreddits = ~75 items per platform
+- Analyze ALL fetched content with OpenAI (no cost control limits - analyze everything)
+- Use platform-specific analysis prompts for improved accuracy
+- Store posts and comments in separate tables with platform_id
+- Generate hourly aggregations with weighted sentiment (posts 3x, comments 1x)
+
+**Total Volume Per Hour:**
+- 3 platforms × 75 items = 225 total items analyzed
+- Staggered collection prevents Reddit API rate limits
+- Automatic cache invalidation after each platform's successful collection
 
 ## Troubleshooting
 
@@ -210,9 +276,11 @@ npx wrangler kv namespace create CLAUDOMETER_CACHE --preview
 - **Build Failures**: Check that `claudometer-web` directory contains proper React app
 - **ESLint Errors in CI**: CI treats ESLint warnings as errors (`process.env.CI = true`). Fix all React hooks exhaustive-deps warnings by using `useCallback` for functions and adding proper dependencies to useEffect arrays
 - **Worker Errors**: Verify all secrets are set in Cloudflare dashboard
-- **Database Issues**: Ensure D1 database is created and bound correctly
-- **API Failures**: Check Reddit API credentials and rate limits
+- **Database Issues**: Ensure D1 database is created and bound correctly. **CRITICAL**: Platforms table must exist - no fallback data!
+- **API Failures**: Check Reddit API credentials and rate limits. Staggered collection should prevent most rate limit issues
 - **Cache Issues**: API changes not visible? Clear cache using `/dev/clear-cache` endpoint
+- **Frontend Integration**: Dashboard requires 6 API calls - check rate limiting if users can't refresh
+- **Platform Data Missing**: Verify platforms table has claude, chatgpt, gemini entries with proper JSON subreddit arrays
 
 ### Essential Development Commands
 ```bash
