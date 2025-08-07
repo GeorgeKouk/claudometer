@@ -275,7 +275,7 @@ const Claudometer = () => {
     } finally {
       setLoading(false);
     }
-  }, [timeframe]);
+  }, [timeframe, API_BASE]);
 
   // Initial fetch and scheduled refresh
   useEffect(() => {
