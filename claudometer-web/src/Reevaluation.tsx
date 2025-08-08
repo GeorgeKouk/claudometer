@@ -70,11 +70,26 @@ const Reevaluation = () => {
       const response = await fetch(`${API_BASE}/topics?period=all`);
       if (response.ok) {
         const topicData = await response.json();
-        const topics: TopicInfo[] = topicData.map((topic: any) => ({
-          name: topic.name,
-          color: topic.color || '#CCCCCC',
-          count: topic.referenceCount || 0
-        }));
+        // Handle multi-platform response structure
+        const allTopics: TopicInfo[] = [];
+        const platformTopics = Object.values(topicData).flat() as any[];
+        
+        // Aggregate topics across platforms
+        const topicMap = new Map<string, TopicInfo>();
+        platformTopics.forEach((topic: any) => {
+          const existing = topicMap.get(topic.name);
+          if (existing) {
+            existing.count = (existing.count || 0) + (topic.count || 0);
+          } else {
+            topicMap.set(topic.name, {
+              name: topic.name,
+              color: topic.color || '#CCCCCC',
+              count: topic.count || 0
+            });
+          }
+        });
+        
+        const topics = Array.from(topicMap.values());
         setAvailableTopics(topics);
         
         // Select all topics by default
