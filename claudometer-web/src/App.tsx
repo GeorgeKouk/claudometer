@@ -1107,7 +1107,7 @@ const Claudometer = () => {
                   <div className="font-semibold text-base">
                     {post.subreddit && post.id ? (
                       <a 
-                        href={`https://reddit.com/r/${post.subreddit}/comments/${post.id}/`}
+                        href={`https://www.reddit.com/${post.subreddit.startsWith('r/') ? '' : 'r/'}${post.subreddit}/comments/${post.id}/`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="hover:underline transition-all duration-200 inline-flex items-center gap-1"

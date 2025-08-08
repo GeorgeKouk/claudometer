@@ -612,7 +612,7 @@ export async function getRecentPosts(env, url) {
     }
     
     const stmt = env.DB.prepare(`
-      SELECT posts.title, posts.subreddit, posts.sentiment, posts.created_at, posts.category, posts.platform_id,
+      SELECT posts.id, posts.title, posts.subreddit, posts.sentiment, posts.created_at, posts.category, posts.platform_id,
              platforms.display_name as platform_name, platforms.color as platform_color
       FROM posts 
       LEFT JOIN platforms ON posts.platform_id = platforms.id
@@ -622,8 +622,8 @@ export async function getRecentPosts(env, url) {
     const results = bindings.length > 0 ? await stmt.bind(...bindings).all() : await stmt.all();
     
     const recentPosts = results.results.map((row, index) => ({
-      id: index + 1,
-      subreddit: `r/${row.subreddit}`,
+      id: row.id,
+      subreddit: row.subreddit, // Remove the hardcoded r/ prefix since frontend now handles this
       title: row.title,
       sentiment: row.sentiment || 0.5,
       category: row.category || 'Features',
