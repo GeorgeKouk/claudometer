@@ -1103,9 +1103,24 @@ const Claudometer = () => {
                     <span>{post.time}</span>
                   </div>
                   
-                  {/* Second row: Title */}
-                  <div className="font-semibold text-base" style={{ color: '#8b4513' }}>
-                    {post.title}
+                  {/* Second row: Title (clickable link to Reddit) */}
+                  <div className="font-semibold text-base">
+                    {post.subreddit && post.id ? (
+                      <a 
+                        href={`https://reddit.com/r/${post.subreddit}/comments/${post.id}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline transition-all duration-200 inline-flex items-center gap-1"
+                        style={{ color: '#8b4513' }}
+                      >
+                        {post.title}
+                        <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    ) : (
+                      <span style={{ color: '#8b4513' }}>{post.title}</span>
+                    )}
                   </div>
                   
                   {/* Third row: Sentiment (bottom left) */}
