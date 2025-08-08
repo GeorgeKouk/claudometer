@@ -40,22 +40,49 @@ export async function collectRedditData(env, platformId = DEFAULT_PLATFORM, subr
       return new Response('No posts fetched from Reddit');
     }
     
-    // Analyze ALL collected posts and comments to ensure data consistency
+    // Try to analyze with OpenAI, but save data regardless
     console.log(`Analyzing ALL ${posts.length} posts and ${comments.length} comments`);
     
-    // Analyze posts with platform-specific configuration
-    const analyzedPosts = await analyzeWithOpenAI(posts, env.OPENAI_API_KEY, env, platformConfig);
+    let analyzedPosts = [];
+    let analyzedComments = [];
     
-    // Analyze comments with platform-specific configuration
-    const analyzedComments = await analyzeWithOpenAI(comments, env.OPENAI_API_KEY, env, platformConfig);
+    try {
+      // Analyze posts with platform-specific configuration
+      analyzedPosts = await analyzeWithOpenAI(posts, env.OPENAI_API_KEY, env, platformConfig);
+      
+      // Analyze comments with platform-specific configuration  
+      analyzedComments = await analyzeWithOpenAI(comments, env.OPENAI_API_KEY, env, platformConfig);
+      
+      console.log(`OpenAI analysis completed: ${analyzedPosts.length} posts, ${analyzedComments.length} comments`);
+    } catch (aiError) {
+      console.error('OpenAI analysis failed, storing posts with default sentiment:', aiError.message);
+      
+      // Store posts with default sentiment (50%) for later reevaluation
+      analyzedPosts = posts.map(post => ({
+        ...post,
+        sentiment: 0.5,
+        category: 'Unprocessed',
+        keywords: JSON.stringify([])
+      }));
+      
+      // Store comments with default sentiment (50%) for later reevaluation
+      analyzedComments = comments.map(comment => ({
+        ...comment,
+        sentiment: 0.5,
+        category: 'Unprocessed', 
+        keywords: JSON.stringify([])
+      }));
+      
+      console.log(`Stored ${analyzedPosts.length} posts and ${analyzedComments.length} comments with default values for later processing`);
+    }
     
-    // Store both in database with platform_id
+    // Store both in database with platform_id (this will always execute now)
     await storeInDatabase(analyzedPosts, analyzedComments, env, platformConfig.id);
     
     // Cache will be refreshed at 0:00 every hour - no manual clearing needed
     console.log('Data collection completed - cache refresh scheduled for next hour');
     
-    return new Response(`Collection completed: ${analyzedPosts.length} posts, ${analyzedComments.length} comments processed`);
+    return new Response(`Collection completed: ${analyzedPosts.length} posts, ${analyzedComments.length} comments stored (some may need reevaluation)`);
   } catch (error) {
     console.error('Data collection error:', error);
     return new Response(`Error: ${error.message}`, { status: 500 });
