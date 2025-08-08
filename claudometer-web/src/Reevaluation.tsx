@@ -71,7 +71,6 @@ const Reevaluation = () => {
       if (response.ok) {
         const topicData = await response.json();
         // Handle multi-platform response structure
-        const allTopics: TopicInfo[] = [];
         const platformTopics = Object.values(topicData).flat() as any[];
         
         // Aggregate topics across platforms
