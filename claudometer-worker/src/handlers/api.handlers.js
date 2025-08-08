@@ -870,7 +870,17 @@ async function getMultiPlatformHourlyDataUncached(env) {
     const platformsResult = await env.DB.prepare('SELECT id, display_name, color FROM platforms WHERE active = 1 ORDER BY id').all();
     const platforms = platformsResult.results;
     
-    // Get data for all platforms for the last 24 hours - use SQLite native datetime
+    // Generate exactly 24 hourly timestamps for the past 24 hours
+    const now = new Date();
+    const hourlyTimestamps = [];
+    for (let i = 23; i >= 0; i--) {
+      const hourAgo = new Date(now.getTime() - (i * 60 * 60 * 1000));
+      // Round to the hour
+      hourAgo.setMinutes(0, 0, 0);
+      hourlyTimestamps.push(hourAgo.toISOString());
+    }
+    
+    // Get data for all platforms for the last 24 hours
     const stmt = env.DB.prepare(`
       SELECT hour, platform_id, weighted_sentiment, post_count, comment_count 
       FROM sentiment_hourly 
@@ -898,15 +908,15 @@ async function getMultiPlatformHourlyDataUncached(env) {
       url: row.url
     }));
     
-    // Group data by hour
-    const timeMap = {};
+    // Group existing data by hour
+    const existingDataMap = {};
     results.results.forEach(row => {
       const time = row.hour;
-      if (!timeMap[time]) {
-        timeMap[time] = {};
+      if (!existingDataMap[time]) {
+        existingDataMap[time] = {};
       }
       
-      timeMap[time][row.platform_id] = {
+      existingDataMap[time][row.platform_id] = {
         sentiment: row.weighted_sentiment || 0.5,
         post_count: row.post_count || 0,
         comment_count: row.comment_count || 0,
@@ -914,11 +924,30 @@ async function getMultiPlatformHourlyDataUncached(env) {
       };
     });
     
-    // Convert to array format
-    const hourlyData = Object.keys(timeMap).sort().map(time => ({
-      time,
-      platforms: timeMap[time]
-    }));
+    // Create exactly 24 data points, filling missing hours with defaults
+    const hourlyData = hourlyTimestamps.map(timestamp => {
+      const platformData = {};
+      
+      // For each platform, use existing data or provide defaults
+      platforms.forEach(platform => {
+        if (existingDataMap[timestamp] && existingDataMap[timestamp][platform.id]) {
+          platformData[platform.id] = existingDataMap[timestamp][platform.id];
+        } else {
+          // Default values for missing data
+          platformData[platform.id] = {
+            sentiment: 0.5,
+            post_count: 0,
+            comment_count: 0,
+            posts: 0
+          };
+        }
+      });
+      
+      return {
+        time: timestamp,
+        platforms: platformData
+      };
+    });
     
     // Create platform metadata
     const platformsMetadata = platforms.map(p => ({
