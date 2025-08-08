@@ -36,7 +36,7 @@ export async function getDevPosts(env, url) {
     
     // Also get comments with post_id
     const commentsStmt = env.DB.prepare(`
-      SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, platform_id, post_id, 'comment' as type
+      SELECT id, '' as title, body as content, subreddit, sentiment, category, keywords, processed_at, platform_id, post_id, 'comment' as type
       FROM comments 
       WHERE processed_at >= ? AND processed_at <= ?
       ORDER BY processed_at DESC
