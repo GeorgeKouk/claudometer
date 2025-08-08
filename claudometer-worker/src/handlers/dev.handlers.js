@@ -34,9 +34,9 @@ export async function getDevPosts(env, url) {
       ORDER BY processed_at DESC
     `);
     
-    // Also get comments
+    // Also get comments with post_id
     const commentsStmt = env.DB.prepare(`
-      SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, platform_id, 'comment' as type
+      SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, platform_id, post_id, 'comment' as type
       FROM comments 
       WHERE processed_at >= ? AND processed_at <= ?
       ORDER BY processed_at DESC
@@ -47,19 +47,28 @@ export async function getDevPosts(env, url) {
       commentsStmt.bind(startDate, endDate).all()
     ]);
     
-    const items = [...postsResults.results, ...commentsResults.results].map(item => ({
-      id: item.id,
-      type: item.type,
-      title: item.title,
-      content: item.content,
-      truncatedContent: getTruncatedText(item.title, item.content),
-      subreddit: item.subreddit,
-      sentiment: item.sentiment,
-      category: item.category,
-      keywords: item.keywords,
-      processed_at: item.processed_at,
-      platform_id: item.platform_id
-    })).sort((a, b) => new Date(b.processed_at) - new Date(a.processed_at));
+    const items = [...postsResults.results, ...commentsResults.results].map(item => {
+      const baseItem = {
+        id: item.id,
+        type: item.type,
+        title: item.title,
+        content: item.content,
+        truncatedContent: getTruncatedText(item.title, item.content),
+        subreddit: item.subreddit,
+        sentiment: item.sentiment,
+        category: item.category,
+        keywords: item.keywords,
+        processed_at: item.processed_at,
+        platform_id: item.platform_id
+      };
+      
+      // Add post_id for comments (required by frontend)
+      if (item.type === 'comment' && item.post_id) {
+        baseItem.post_id = item.post_id;
+      }
+      
+      return baseItem;
+    }).sort((a, b) => new Date(b.processed_at) - new Date(a.processed_at));
 
     return new Response(JSON.stringify(items), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
@@ -119,11 +128,14 @@ export async function reevaluateSentiments(request, env) {
             id: item.id,
             type: item.type,
             title: item.title,
+            truncatedContent: getTruncatedText(item.title, item.content),
             platform_id: item.platform_id,
             oldSentiment: item.sentiment,
             newSentiment: newSentiment,
             oldCategory: item.category,
-            newCategory: newCategory
+            newCategory: newCategory,
+            oldKeywords: item.keywords || '',
+            newKeywords: newKeywords || ''
           });
         }
       } catch (error) {
@@ -131,6 +143,7 @@ export async function reevaluateSentiments(request, env) {
           id: item.id,
           type: item.type,
           title: item.title,
+          truncatedContent: getTruncatedText(item.title, item.content),
           platform_id: item.platform_id,
           error: error.message
         });
