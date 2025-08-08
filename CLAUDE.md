@@ -327,3 +327,4 @@ npx wrangler d1 execute claudometer-db --remote --command "SELECT * FROM events 
 
 ### Cloudflare Tooling
 - We installed wrangler and connected it to Cloudflare so you can access the D1 database and run the worker and app 
+- always ask for permission before deploying with wrangler
