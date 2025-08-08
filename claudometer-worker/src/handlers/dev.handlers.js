@@ -26,27 +26,40 @@ export async function getDevPosts(env, url) {
       });
     }
 
+    // Get posts with platform_id
     const postsStmt = env.DB.prepare(`
-      SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, 'post' as type
+      SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, platform_id, 'post' as type
       FROM posts 
       WHERE processed_at >= ? AND processed_at <= ?
       ORDER BY processed_at DESC
     `);
     
-    const results = await postsStmt.bind(startDate, endDate).all();
+    // Also get comments
+    const commentsStmt = env.DB.prepare(`
+      SELECT id, title, content, subreddit, sentiment, category, keywords, processed_at, platform_id, 'comment' as type
+      FROM comments 
+      WHERE processed_at >= ? AND processed_at <= ?
+      ORDER BY processed_at DESC
+    `);
     
-    const items = results.results.map(post => ({
-      id: post.id,
-      type: 'post',
-      title: post.title,
-      content: post.content,
-      truncatedContent: getTruncatedText(post.title, post.content),
-      subreddit: post.subreddit,
-      sentiment: post.sentiment,
-      category: post.category,
-      keywords: post.keywords,
-      processed_at: post.processed_at
-    }));
+    const [postsResults, commentsResults] = await Promise.all([
+      postsStmt.bind(startDate, endDate).all(),
+      commentsStmt.bind(startDate, endDate).all()
+    ]);
+    
+    const items = [...postsResults.results, ...commentsResults.results].map(item => ({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      content: item.content,
+      truncatedContent: getTruncatedText(item.title, item.content),
+      subreddit: item.subreddit,
+      sentiment: item.sentiment,
+      category: item.category,
+      keywords: item.keywords,
+      processed_at: item.processed_at,
+      platform_id: item.platform_id
+    })).sort((a, b) => new Date(b.processed_at) - new Date(a.processed_at));
 
     return new Response(JSON.stringify(items), {
       headers: { 'Content-Type': 'application/json', ...getCorsHeaders(env) }
@@ -73,23 +86,31 @@ export async function reevaluateSentiments(request, env) {
       });
     }
 
+    // Import platform configs
+    const { getPlatformConfig } = await import('../config/platforms.js');
+
     const results = [];
     
     for (const item of items) {
       try {
+        // Get platform configuration based on platform_id
+        const platformConfig = getPlatformConfig(item.platform_id || 'claude');
+        
         const analyzed = await analyzeWithOpenAI([{
           id: item.id,
           title: item.title,
           content: item.content
-        }], env.OPENAI_API_KEY, env);
+        }], env.OPENAI_API_KEY, env, platformConfig);
 
         if (analyzed.length > 0) {
           const newSentiment = analyzed[0].sentiment;
           const newCategory = analyzed[0].category;
           const newKeywords = analyzed[0].keywords;
 
+          // Update the correct table based on item type
+          const tableName = item.type === 'comment' ? 'comments' : 'posts';
           await env.DB.prepare(`
-            UPDATE posts 
+            UPDATE ${tableName} 
             SET sentiment = ?, category = ?, keywords = ?
             WHERE id = ?
           `).bind(newSentiment, newCategory, newKeywords, item.id).run();
@@ -98,6 +119,7 @@ export async function reevaluateSentiments(request, env) {
             id: item.id,
             type: item.type,
             title: item.title,
+            platform_id: item.platform_id,
             oldSentiment: item.sentiment,
             newSentiment: newSentiment,
             oldCategory: item.category,
@@ -109,6 +131,7 @@ export async function reevaluateSentiments(request, env) {
           id: item.id,
           type: item.type,
           title: item.title,
+          platform_id: item.platform_id,
           error: error.message
         });
       }
