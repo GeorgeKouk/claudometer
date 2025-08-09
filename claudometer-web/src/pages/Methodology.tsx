@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import Footer from '../components/Footer';
 
 const Methodology: React.FC = () => {
   return (
@@ -37,7 +38,7 @@ const Methodology: React.FC = () => {
           </div>
           
           <p className="text-lg font-medium" style={{ color: '#9f6841' }}>
-            Understanding the methodology behind Claudometer's sentiment analysis and data collection
+            Understanding the methodology behind Claudometer's multi-platform sentiment analysis and data collection
           </p>
         </div>
 
@@ -52,24 +53,86 @@ const Methodology: React.FC = () => {
               Data Collection
             </h2>
             
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-3" style={{ color: '#8b4513' }}>Sources</h3>
-                <ul className="space-y-2 text-sm" style={{ color: '#9f6841' }}>
-                  <li>• <strong>r/Anthropic</strong> - Official Anthropic community</li>
-                  <li>• <strong>r/ClaudeAI</strong> - General Claude discussions</li>
-                  <li>• <strong>r/ClaudeCode</strong> - Claude Code specific topics</li>
-                </ul>
+            <div className="space-y-6">
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2" style={{ color: '#8B4513' }}>
+                    <div className="w-4 h-4 mask-image" style={{
+                      backgroundColor: '#8B4513',
+                      maskImage: 'url(/platform-logos/claude.webp)',
+                      maskSize: 'contain',
+                      maskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskImage: 'url(/platform-logos/claude.webp)'
+                    }} />
+                    Claude AI
+                  </h4>
+                  <ul className="space-y-1 text-xs" style={{ color: '#9f6841' }}>
+                    <li>• <strong>r/Anthropic</strong> - Official community</li>
+                    <li>• <strong>r/ClaudeAI</strong> - General discussions</li>
+                    <li>• <strong>r/ClaudeCode</strong> - Coding topics</li>
+                  </ul>
+                </div>
+                
+                <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2" style={{ color: '#10A37F' }}>
+                    <div className="w-4 h-4 mask-image" style={{
+                      backgroundColor: '#10A37F',
+                      maskImage: 'url(/platform-logos/chatgpt.webp)',
+                      maskSize: 'contain',
+                      maskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskImage: 'url(/platform-logos/chatgpt.webp)'
+                    }} />
+                    ChatGPT
+                  </h4>
+                  <ul className="space-y-1 text-xs" style={{ color: '#9f6841' }}>
+                    <li>• <strong>r/OpenAI</strong> - Official OpenAI</li>
+                    <li>• <strong>r/ChatGPT</strong> - Main community</li>
+                    <li>• <strong>r/ChatGPTPro</strong> - Premium discussions</li>
+                  </ul>
+                </div>
+                
+                <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2" style={{ color: '#4285F4' }}>
+                    <div className="w-4 h-4 mask-image" style={{
+                      backgroundColor: '#4285F4',
+                      maskImage: 'url(/platform-logos/gemini.webp)',
+                      maskSize: 'contain',
+                      maskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskImage: 'url(/platform-logos/gemini.webp)'
+                    }} />
+                    Gemini
+                  </h4>
+                  <ul className="space-y-1 text-xs" style={{ color: '#9f6841' }}>
+                    <li>• <strong>r/GeminiAI</strong> - Main community</li>
+                    <li>• <strong>r/Bard</strong> - Legacy discussions</li>
+                    <li>• <strong>r/GoogleGeminiAI</strong> - Google-specific</li>
+                  </ul>
+                </div>
               </div>
               
-              <div>
-                <h3 className="text-lg font-semibold mb-3" style={{ color: '#8b4513' }}>Collection Process</h3>
-                <ul className="space-y-2 text-sm" style={{ color: '#9f6841' }}>
-                  <li>• <strong>Frequency:</strong> Every hour</li>
-                  <li>• <strong>Posts:</strong> Top 20 recent posts per subreddit</li>
-                  <li>• <strong>Comments:</strong> Top 5 comments per post</li>
-                  <li>• <strong>Analysis:</strong> All collected posts and comments analyzed</li>
-                </ul>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-3" style={{ color: '#8b4513' }}>Collection Schedule</h3>
+                  <ul className="space-y-2 text-sm" style={{ color: '#9f6841' }}>
+                    <li>• <strong>Staggered Collection:</strong> Every hour with 15-minute intervals</li>
+                    <li>• <strong>0-15 min:</strong> Claude data collection</li>
+                    <li>• <strong>15-30 min:</strong> ChatGPT data collection</li>
+                    <li>• <strong>30-45 min:</strong> Gemini data collection</li>
+                  </ul>
+                </div>
+                
+                <div>
+                  <h3 className="text-lg font-semibold mb-3" style={{ color: '#8b4513' }}>Collection Volume</h3>
+                  <ul className="space-y-2 text-sm" style={{ color: '#9f6841' }}>
+                    <li>• <strong>Per Platform:</strong> 15 posts per subreddit + 5 comments each</li>
+                    <li>• <strong>Total Per Hour:</strong> Up to 225 items analyzed (75 × 3 platforms)</li>
+                    <li>• <strong>Analysis:</strong> All collected content analyzed with AI</li>
+                    <li>• <strong>Rate Limiting:</strong> Smart delays prevent API limits</li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
@@ -85,10 +148,10 @@ const Methodology: React.FC = () => {
             
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-semibold mb-3" style={{ color: '#8b4513' }}>AI-Powered Analysis</h3>
+                <h3 className="text-lg font-semibold mb-3" style={{ color: '#8b4513' }}>Multi-Platform AI Analysis</h3>
                 <p className="text-sm mb-4" style={{ color: '#9f6841' }}>
-                  We use OpenAI's language models to analyze the sentiment of each post and comment. 
-                  The AI evaluates the overall tone, context, and emotional indicators to assign a sentiment score.
+                  We use OpenAI's language models with platform-specific prompts to analyze sentiment across Claude, ChatGPT, and Gemini communities. 
+                  Each platform has tailored analysis to understand context, terminology, and community-specific discussions.
                 </p>
                 
                 <div className="grid md:grid-cols-3 gap-4">
@@ -111,9 +174,9 @@ const Methodology: React.FC = () => {
                   </div>
                   
                   <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
-                    <h4 className="font-semibold mb-2" style={{ color: '#8b4513' }}>Context Aware</h4>
+                    <h4 className="font-semibold mb-2" style={{ color: '#8b4513' }}>Platform-Specific Analysis</h4>
                     <p className="text-xs" style={{ color: '#9f6841' }}>
-                      Considers sarcasm, technical discussions, and Claude-specific terminology
+                      Tailored prompts for each platform's terminology, features, and community context
                     </p>
                   </div>
                 </div>
@@ -207,8 +270,8 @@ const Methodology: React.FC = () => {
               <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
                 <h3 className="font-semibold mb-2" style={{ color: '#8b4513' }}>Data Sampling</h3>
                 <p>
-                  Due to API rate limits and cost considerations, we analyze a subset of posts and comments. 
-                  Results represent trends rather than comprehensive community sentiment.
+                  We analyze approximately 225 items per hour across all platforms. 
+                  Staggered collection prevents rate limits while ensuring comprehensive coverage of recent discussions.
                 </p>
               </div>
               
@@ -221,16 +284,17 @@ const Methodology: React.FC = () => {
               </div>
               
               <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
-                <h3 className="font-semibold mb-2" style={{ color: '#8b4513' }}>Reddit Bias</h3>
+                <h3 className="font-semibold mb-2" style={{ color: '#8b4513' }}>Platform Representation</h3>
                 <p>
-                  Data reflects only public Reddit discussions. Community sentiment may differ from 
-                  broader user sentiment across other platforms or private channels.
+                  Data reflects public Reddit discussions across multiple AI platform communities. 
+                  Cross-platform comparison helps identify broader trends, though sentiment may differ from private channels or other platforms.
                 </p>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 };

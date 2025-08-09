@@ -108,10 +108,26 @@ const Contact: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-8 p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
-              <p className="text-sm font-medium" style={{ color: '#9f6841' }}>
-                <strong>Response Time:</strong> We will be in contact within 2 working days.
-              </p>
+            <div className="mt-8 space-y-4">
+              <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
+                <p className="text-sm font-medium" style={{ color: '#9f6841' }}>
+                  <strong>Response Time:</strong> We will be in contact within 2 working days.
+                </p>
+              </div>
+              
+              <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(246, 237, 229, 0.5)' }}>
+                <p className="text-sm font-medium" style={{ color: '#9f6841' }}>
+                  Follow me on X/Twitter: <a 
+                    href="https://x.com/kouk_george" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="hover:underline transition-all duration-200"
+                    style={{ color: '#8b4513' }}
+                  >
+                    @kouk_george
+                  </a>
+                </p>
+              </div>
             </div>
           </div>
         </div>

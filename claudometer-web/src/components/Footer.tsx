@@ -20,13 +20,13 @@ const Footer: React.FC = () => {
             </h4>
             <div className="space-y-2 text-sm" style={{ color: '#9f6841' }}>
               <p>
-                <strong>Data Source:</strong> Reddit API (r/Anthropic, r/ClaudeAI, r/ClaudeCode)
+                <strong>Data Sources:</strong> Multi-platform Reddit monitoring (Claude, ChatGPT, Gemini)
               </p>
               <p>
                 <strong>Privacy:</strong> No personal data stored. Only public Reddit posts analyzed.
               </p>
               <p>
-                <strong>Analysis:</strong> Sentiment scoring via OpenAI API
+                <strong>Analysis:</strong> Platform-specific sentiment analysis via OpenAI API
               </p>
             </div>
           </div>
@@ -61,13 +61,13 @@ const Footer: React.FC = () => {
             </h4>
             <div className="space-y-2 text-sm" style={{ color: '#9f6841' }}>
               <p>
-                Real-time sentiment tracking for Claude AI community discussions.
+                Real-time sentiment tracking across Claude, ChatGPT, and Gemini communities.
               </p>
               <p>
                 <strong>Last Updated:</strong> {buildDate}
               </p>
               <p>
-                Data refreshes hourly.
+                Data refreshes hourly with staggered multi-platform collection.
               </p>
             </div>
           </div>
@@ -76,7 +76,16 @@ const Footer: React.FC = () => {
         {/* Bottom Bar */}
         <div className="mt-8 pt-6 border-t border-opacity-20 flex flex-col sm:flex-row justify-between items-center" style={{ borderColor: '#d4a37f' }}>
           <div className="text-sm font-medium mb-2 sm:mb-0" style={{ color: '#9f6841' }}>
-            © {currentYear} Claudometer. Made with ❤️ for the Claude community.
+            © {currentYear} Claudometer. Made with ❤️ for the Claude community by{' '}
+            <a 
+              href="https://x.com/kouk_george" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:underline transition-all duration-200"
+              style={{ color: '#8b4513' }}
+            >
+              @kouk_george
+            </a>
           </div>
           <div className="text-xs" style={{ color: '#9f6841' }}>
             Not affiliated with Anthropic
