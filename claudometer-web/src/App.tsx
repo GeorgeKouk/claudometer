@@ -734,6 +734,10 @@ const Claudometer = () => {
                         const { cx, cy, payload } = props;
                         // Only show events on first selected platform to avoid duplication
                         const showEvents = selectedPlatforms[0] === 'claude';
+                        // Don't render dot if no sentiment data for this platform
+                        if (payload?.claude_sentiment === null || payload?.claude_sentiment === undefined) {
+                          return null;
+                        }
                         return (
                           <g key={`claude-dot-${payload?.time || cx}`}>
                             {/* Event vertical lines - only renders if events exist and this is first platform */}
@@ -804,6 +808,10 @@ const Claudometer = () => {
                         const { cx, cy, payload } = props;
                         // Only show events on first selected platform to avoid duplication
                         const showEvents = selectedPlatforms[0] === 'chatgpt';
+                        // Don't render dot if no sentiment data for this platform
+                        if (payload?.chatgpt_sentiment === null || payload?.chatgpt_sentiment === undefined) {
+                          return null;
+                        }
                         return (
                           <g key={`chatgpt-dot-${payload?.time || cx}`}>
                             {/* Event vertical lines - only renders if events exist and this is first platform */}
@@ -874,6 +882,10 @@ const Claudometer = () => {
                         const { cx, cy, payload } = props;
                         // Only show events on first selected platform to avoid duplication
                         const showEvents = selectedPlatforms[0] === 'gemini';
+                        // Don't render dot if no sentiment data for this platform
+                        if (payload?.gemini_sentiment === null || payload?.gemini_sentiment === undefined) {
+                          return null;
+                        }
                         return (
                           <g key={`gemini-dot-${payload?.time || cx}`}>
                             {/* Event vertical lines - only renders if events exist and this is first platform */}
