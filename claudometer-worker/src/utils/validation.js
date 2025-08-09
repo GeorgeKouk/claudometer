@@ -63,26 +63,24 @@ export function validateOutput(content) {
     
     // Validate topic is a string and not suspicious
     if (typeof parsed.topic !== 'string' || parsed.topic.length > 50) {
-      parsed.topic = 'Features'; // Default topic
+      parsed.topic = 'Unknown'; // Default topic
     }
     
     // Sanitize topic field
     parsed.topic = parsed.topic.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
     
-    // Validate keywords is an array of strings
+    // Validate keywords is an array of 0-5 strings
     if (!Array.isArray(parsed.keywords)) {
-      parsed.keywords = ['general'];
+      parsed.keywords = [];
     } else {
-      // Sanitize and limit keywords
+      // Sanitize and limit keywords (allow 0-5, including technical terms with special chars)
       parsed.keywords = parsed.keywords
-        .filter(kw => typeof kw === 'string' && kw.length <= 30)
-        .map(kw => kw.replace(/[^a-zA-Z0-9\s-]/g, '').trim())
+        .filter(kw => typeof kw === 'string' && kw.length <= 30 && kw.length > 0)
+        .map(kw => kw.replace(/[^a-zA-Z0-9\s\-_.]/g, '').trim())
         .filter(kw => kw.length > 0)
-        .slice(0, 3);
+        .slice(0, 5); // Allow up to 5 keywords
       
-      if (parsed.keywords.length === 0) {
-        parsed.keywords = ['general'];
-      }
+      // No fallback to 'general' - empty arrays are valid
     }
     
     return parsed;
@@ -91,8 +89,8 @@ export function validateOutput(content) {
     // Return safe default values
     return {
       sentiment: 0.5,
-      topic: 'Features',
-      keywords: ['general']
+      topic: 'Unknown',
+      keywords: []
     };
   }
 }

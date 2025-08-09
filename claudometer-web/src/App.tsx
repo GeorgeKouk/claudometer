@@ -626,19 +626,17 @@ const Claudometer = () => {
                     tickFormatter={(value) => {
                       const date = new Date(value);
                       if (timeframe === '24h') {
-                        // Show hours for 24h view
+                        // Show hours for 24h view in local time
                         return date.toLocaleTimeString('en-US', { 
                           hour: '2-digit', 
                           minute: '2-digit',
-                          hour12: false,
-                          timeZone: 'UTC'
+                          hour12: false
                         });
                       } else {
-                        // Show dates for longer periods
+                        // Show dates for longer periods in local time
                         return date.toLocaleDateString('en-US', { 
                           month: 'short', 
-                          day: 'numeric',
-                          timeZone: 'UTC'
+                          day: 'numeric'
                         });
                       }
                     }}
@@ -659,7 +657,7 @@ const Claudometer = () => {
                   />
                   <Tooltip 
                     formatter={(value, name, props) => {
-                      if (name === 'Claude AI' || name === 'ChatGPT' || name === 'Google Gemini') {
+                      if (name === 'Claude AI' || name === 'ChatGPT' || name === 'Gemini') {
                         return [(Number(value) * 100).toFixed(1) + '%', name];
                       }
                       return [value, name];
@@ -870,7 +868,7 @@ const Claudometer = () => {
                       dataKey="gemini_sentiment" 
                       stroke="#4285F4" 
                       strokeWidth={3}
-                      name="Google Gemini"
+                      name="Gemini"
                       connectNulls={false}
                       dot={(props) => {
                         const { cx, cy, payload } = props;
