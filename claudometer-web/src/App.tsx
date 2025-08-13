@@ -205,6 +205,46 @@ const Claudometer = () => {
     return transformedHourlyData;
   }, [hourlyData]);
 
+  // Calculate dynamic Y-axis range based on selected platforms and timeframe
+  const yAxisDomain = useMemo(() => {
+    // Use default range for 24h view
+    if (timeframe === '24h') {
+      return [0, 1];
+    }
+
+    // For 7d, 30d, and all time views, calculate dynamic range
+    const sentimentValues: number[] = [];
+    
+    chartData.forEach(dataPoint => {
+      selectedPlatforms.forEach(platformId => {
+        const sentimentKey = `${platformId}_sentiment` as keyof typeof dataPoint;
+        const sentiment = dataPoint[sentimentKey] as number;
+        if (sentiment !== null && sentiment !== undefined && !isNaN(sentiment)) {
+          sentimentValues.push(sentiment);
+        }
+      });
+    });
+
+    if (sentimentValues.length === 0) {
+      return [0, 1]; // Fallback to default range
+    }
+
+    const minSentiment = Math.min(...sentimentValues);
+    const maxSentiment = Math.max(...sentimentValues);
+    const range = maxSentiment - minSentiment;
+    
+    // Add 20% padding on both sides
+    const padding = range * 0.2;
+    const paddedMin = Math.max(0, minSentiment - padding); // Don't go below 0
+    const paddedMax = Math.min(1, maxSentiment + padding); // Don't go above 1
+    
+    // Round outwards to nearest 5% increment for visual appeal
+    // Convert to percentage (0-100), round, then back to 0-1 scale
+    const roundedMin = Math.floor((paddedMin * 100) / 5) * 5 / 100;
+    const roundedMax = Math.ceil((paddedMax * 100) / 5) * 5 / 100;
+    
+    return [Math.max(0, roundedMin), Math.min(1, roundedMax)];
+  }, [chartData, selectedPlatforms, timeframe]);
 
   // Calculate next refresh time (3 minutes after each hour)
   const getNextRefreshTime = () => {
@@ -643,7 +683,7 @@ const Claudometer = () => {
                   />
                   <YAxis 
                     yAxisId="sentiment"
-                    domain={[0, 1]} 
+                    domain={yAxisDomain} 
                     tickFormatter={(value) => (value * 100).toFixed(0) + '%'}
                     tick={{ fill: '#9f6841', fontSize: 12 }}
                     axisLine={{ stroke: '#ead1bf' }}
