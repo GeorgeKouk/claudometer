@@ -30,7 +30,7 @@ export async function getFromCache(key, env) {
     const now = Date.now();
     
     // Dynamic cache TTL based on period
-    let cacheTTL = 3300000; // Default 55 minutes for 24h
+    let cacheTTL = 3900000; // Default 65 minutes for 24h (safety buffer)
     if (key.includes('period=30d')) {
       cacheTTL = 14400000; // 4 hours for 30d
     } else if (key.includes('period=all')) {

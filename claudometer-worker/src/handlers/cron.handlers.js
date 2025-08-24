@@ -79,8 +79,10 @@ export async function collectRedditData(env, platformId = DEFAULT_PLATFORM, subr
     // Store both in database with platform_id (this will always execute now)
     await storeInDatabase(analyzedPosts, analyzedComments, env, platformConfig.id);
     
-    // Cache will be refreshed at 0:00 every hour - no manual clearing needed
-    console.log('Data collection completed - cache refresh scheduled for next hour');
+    // Immediately refresh cache after data collection to ensure users always get cached responses
+    console.log('Refreshing API cache after data collection...');
+    await refreshAllEndpointCaches(env);
+    console.log('Cache refresh completed - users will get instant responses');
     
     return new Response(`Collection completed: ${analyzedPosts.length} posts, ${analyzedComments.length} comments stored (some may need reevaluation)`);
   } catch (error) {
@@ -144,14 +146,14 @@ export async function collectAllPlatformsData(env) {
 }
 
 /**
- * Warm all cache keys by making internal API calls
- * Runs at :45 minutes to refresh cache before next hour's data collection
+ * Refresh all endpoint caches immediately after data collection
+ * Ensures users always get cached responses without triggering DB queries
  */
-export async function warmCache(env) {
+export async function refreshAllEndpointCaches(env) {
   try {
-    console.log('Starting cache warming...');
+    console.log('Refreshing all endpoint caches...');
     
-    // List of all API endpoints to warm
+    // List of all API endpoints to refresh
     const endpoints = [
       'current-sentiment',
       'hourly-data', 
@@ -163,35 +165,33 @@ export async function warmCache(env) {
     
     const periods = ['24h']; // Main period used by frontend
     
-    // Warm cache for each endpoint
+    // Refresh cache for each endpoint
     const promises = [];
     for (const endpoint of endpoints) {
       if (endpoint === 'platforms') {
         // Platforms doesn't use period parameter
-        promises.push(warmEndpoint(env, endpoint, ''));
+        promises.push(refreshEndpointCache(env, endpoint, ''));
       } else {
-        // Warm with default period
-        promises.push(warmEndpoint(env, endpoint, `period=${periods[0]}`));
+        // Refresh with default period
+        promises.push(refreshEndpointCache(env, endpoint, `period=${periods[0]}`));
       }
     }
     
     await Promise.all(promises);
-    console.log('Cache warming completed successfully');
-    
-    return new Response('Cache warmed successfully');
+    console.log('All endpoint caches refreshed successfully');
   } catch (error) {
-    console.error('Cache warming error:', error);
-    return new Response(`Cache warming error: ${error.message}`, { status: 500 });
+    console.error('Cache refresh error:', error);
+    throw error;
   }
 }
 
 /**
- * Helper function to warm a specific endpoint
+ * Helper function to refresh cache for a specific endpoint
  */
-async function warmEndpoint(env, endpoint, queryParams) {
+async function refreshEndpointCache(env, endpoint, queryParams) {
   try {
     const url = queryParams ? `/${endpoint}?${queryParams}` : `/${endpoint}`;
-    console.log(`Warming cache for: ${url}`);
+    console.log(`Refreshing cache for: ${url}`);
     
     // Import the specific handler functions
     const { 

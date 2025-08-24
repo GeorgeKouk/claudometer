@@ -33,32 +33,6 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // Rate limiting: 120 requests per hour per IP
-    const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-    const rateLimitKey = `rate_limit:${clientIP}`;
-    
-    try {
-      const requestCount = await env.CLAUDOMETER_CACHE.get(rateLimitKey);
-      const currentCount = requestCount ? parseInt(requestCount) : 0;
-      
-      if (currentCount >= 120) {
-        return new Response(JSON.stringify({ 
-          error: 'Rate limit exceeded', 
-          message: 'Maximum 120 requests per hour allowed' 
-        }), { 
-          status: 429, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-      
-      // Increment counter with 1 hour expiration
-      await env.CLAUDOMETER_CACHE.put(rateLimitKey, (currentCount + 1).toString(), { 
-        expirationTtl: 3600 
-      });
-    } catch (rateLimitError) {
-      console.error('Rate limiting error:', rateLimitError);
-      // Continue processing request if rate limiting fails
-    }
 
     try {
       // Public API endpoints
@@ -141,12 +115,6 @@ export default {
         platform = CHATGPT_PLATFORM;
       } else if (minutes >= 30 && minutes < 45) {
         platform = GEMINI_PLATFORM;
-      } else if (minutes >= 45) {
-        // Cache warming at :45 minutes
-        console.log(`Starting cache warming at ${currentTime.toISOString()}`);
-        const { warmCache } = await import('./handlers/cron.handlers.js');
-        ctx.waitUntil(warmCache(env));
-        return;
       }
       
       if (platform) {
