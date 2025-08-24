@@ -49,7 +49,7 @@ export async function analyzeWithOpenAI(posts, apiKey, env, platformConfig = nul
     try {
       // Skip if post is null/undefined or missing required fields
       if (!post || !post.id) {
-        console.log('Skipping invalid post object');
+        console.warn('Skipping invalid post object (missing ID)');
         continue;
       }
       
@@ -58,7 +58,7 @@ export async function analyzeWithOpenAI(posts, apiKey, env, platformConfig = nul
       const text = `${title} ${content}`.trim();
       
       if (!text || text === 'undefined undefined' || text === 'undefined' || text.length < 5) {
-        console.log(`Skipping post ${post.id} - insufficient text content`);
+        console.warn(`Skipping post ${post.id} - insufficient content`);
         continue;
       }
       
@@ -141,18 +141,19 @@ Example response: {"sentiment": 0.2, "topic": "Reliability", "keywords": ["crash
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error(`OpenAI API Error Details:`, {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorBody
-        });
-        
-        // Skip post if rate limited or other API error
         if (response.status === 429) {
-          console.log('Rate limited, skipping remaining posts');
+          console.warn('OpenAI rate limit reached, skipping remaining posts');
           break;
+        } else {
+          console.error(`OpenAI API error for post ${post.id}:`, {
+            status: response.status,
+            statusText: response.statusText,
+            postTitle: post.title || 'No title',
+            errorBody: errorBody.substring(0, 200)
+          });
+          // Skip this post instead of throwing error
+          continue;
         }
-        throw new Error(`OpenAI API error: ${response.status}`);
       }
 
       const result = await response.json();
@@ -160,7 +161,7 @@ Example response: {"sentiment": 0.2, "topic": "Reliability", "keywords": ["crash
       
       // Check if response has expected structure
       if (!result.choices || !result.choices[0] || !result.choices[0].message) {
-        console.error('Unexpected OpenAI response structure:', result);
+        console.warn(`Invalid OpenAI response for post ${post.id}, skipping`);
         continue;
       }
       
@@ -188,12 +189,9 @@ Example response: {"sentiment": 0.2, "topic": "Reliability", "keywords": ["crash
       await new Promise(resolve => setTimeout(resolve, rateLimits.openaiDelay));
 
     } catch (error) {
-      console.error(`Analysis error for post "${post.title || 'Untitled'}":`, {
-        error: error.message,
-        stack: error.stack,
-        postId: post.id
-      });
-      // Skip failed posts instead of adding mock data
+      const postTitle = post.title || post.id || 'Unknown';
+      console.warn(`Skipping analysis for post "${postTitle}" - ${error.message}`);
+      // Gracefully skip failed posts instead of raising errors
       continue;
     }
   }

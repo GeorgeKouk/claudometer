@@ -98,11 +98,16 @@ export async function fetchRedditPosts(env, platformConfig = null, subreddits = 
           remaining: response.headers.get('X-Ratelimit-Remaining'),
           reset: response.headers.get('X-Ratelimit-Reset')
         };
-        console.error(`Reddit error for r/${subreddit}:`, {
-          status: response.status,
-          statusText: response.statusText,
-          rateLimitHeaders
-        });
+        if (response.status === 429) {
+          console.warn(`Rate limited on r/${subreddit}, skipping`);
+        } else {
+          console.error(`Reddit API error for r/${subreddit}:`, {
+            status: response.status,
+            statusText: response.statusText,
+            subreddit: subreddit,
+            rateLimitHeaders
+          });
+        }
         continue;
       }
 
@@ -110,7 +115,7 @@ export async function fetchRedditPosts(env, platformConfig = null, subreddits = 
       
       // Check if Reddit response has expected structure
       if (!data || !data.data || !data.data.children) {
-        console.error(`Invalid Reddit response structure for r/${subreddit}`);
+        console.warn(`No posts found in r/${subreddit} or invalid response structure`);
         continue;
       }
       
@@ -196,14 +201,19 @@ export async function fetchRedditPosts(env, platformConfig = null, subreddits = 
               remaining: commentsResponse.headers.get('X-Ratelimit-Remaining'),
               reset: commentsResponse.headers.get('X-Ratelimit-Reset')
             };
-            console.error(`Reddit error fetching comments for post ${post.id}:`, {
-              status: commentsResponse.status,
-              statusText: commentsResponse.statusText,
-              rateLimitHeaders
-            });
+            if (commentsResponse.status === 429) {
+              console.warn(`Rate limited fetching comments for post ${post.id}`);
+            } else {
+              console.error(`Reddit comments error for post ${post.id}:`, {
+                status: commentsResponse.status,
+                statusText: commentsResponse.statusText,
+                postTitle: post.title || 'No title',
+                rateLimitHeaders
+              });
+            }
           }
         } catch (commentError) {
-          console.error(`Error fetching comments for ${post.id}:`, commentError.message);
+          console.warn(`Skipping comments for post ${post.id}: ${commentError.message}`);
         }
         
         // Rate limiting delay between comment requests using platform config
@@ -214,7 +224,7 @@ export async function fetchRedditPosts(env, platformConfig = null, subreddits = 
       await new Promise(resolve => setTimeout(resolve, rateLimits.subredditDelay));
       
     } catch (error) {
-      console.error(`Error fetching r/${subreddit}:`, error.message);
+      console.warn(`Skipping r/${subreddit}: ${error.message}`);
     }
   }
 
